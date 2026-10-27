@@ -1,0 +1,9 @@
+E:/CampusShare/build/CMakeFiles/uninstall.dir
+E:/CampusShare/build/CMakeFiles/package.dir
+E:/CampusShare/build/CMakeFiles/package_source.dir
+E:/CampusShare/build/CMakeFiles/edit_cache.dir
+E:/CampusShare/build/CMakeFiles/rebuild_cache.dir
+E:/CampusShare/build/CMakeFiles/list_install_components.dir
+E:/CampusShare/build/CMakeFiles/install.dir
+E:/CampusShare/build/CMakeFiles/install/local.dir
+E:/CampusShare/build/CMakeFiles/install/strip.dir
