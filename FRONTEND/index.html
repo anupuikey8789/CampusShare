@@ -1,0 +1,150 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CampusShare | Student Resource Sharing</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header class="navbar">
+        <h2 class="logo">CampusShare</h2>
+
+        <nav>
+            <a href="#home">Home</a>
+            <a href="#resources">Resources</a>
+            <a href="#about">About</a>
+        </nav>
+
+        <button class="login-btn">Login</button>
+    </header>
+
+    <main>
+       
+<section class="hero" id="home">
+    <div class="hero-content">
+        <p class="tagline">YOUR CAMPUS. YOUR COMMUNITY.</p>
+
+        <h1>
+            Share Knowledge.<br>
+            <span>Grow Together.</span>
+        </h1>
+
+        <p class="description">
+            Share books, discover study materials, and help
+            fellow students succeed. Learning is better together.
+        </p>
+
+        <a href="#resources" class="primary-btn">
+            Explore Resources →
+        </a>
+    </div>
+</section>
+
+
+<section class="resources" id="resources">
+    <div class="section-heading">
+        <p class="tagline">YOUR LEARNING LIBRARY</p>
+        <h2>Explore Resources</h2>
+        <p>Find and share useful materials with fellow students.</p>
+    </div>
+
+    <div class="resource-controls">
+        <input
+            type="search"
+            id="searchInput"
+            placeholder="Search by title or description..."
+            aria-label="Search resources"
+        >
+
+        <select id="categoryFilter" aria-label="Filter by category">
+            <option value="all">All Categories</option>
+            <option value="Books">Books</option>
+            <option value="Notes">Notes</option>
+            <option value="Lab Manuals">Lab Manuals</option>
+            <option value="Equipment">Equipment</option>
+        </select>
+
+        <select id="sortSelect" aria-label="Sort resources">
+            <option value="newest">Newest First</option>
+            <option value="title">Title: A–Z</option>
+        </select>
+    </div>
+
+    <div class="resource-summary">
+        <p id="resourceCount">3 resources available</p>
+        <button type="button" id="showAddForm">+ Add Resource</button>
+    </div>
+
+    <form id="resourceForm" class="resource-form" hidden>
+        <h3>Add a Resource</h3>
+
+        <label for="resourceTitle">Resource title</label>
+        <input id="resourceTitle" type="text" maxlength="100"
+               placeholder="e.g. Data Structures Notes" required>
+
+        <label for="resourceDescription">Description</label>
+        <textarea id="resourceDescription" maxlength="300"
+                  placeholder="What will students find useful?" required></textarea>
+
+        <label for="resourceCategory">Category</label>
+        <select id="resourceCategory" required>
+            <option value="Books">Books</option>
+            <option value="Notes">Notes</option>
+            <option value="Lab Manuals">Lab Manuals</option>
+            <option value="Equipment">Equipment</option>
+        </select>
+
+        <div class="form-actions">
+            <button type="submit">Add Resource</button>
+            <button type="button" id="cancelAddForm" class="secondary-btn">
+                Cancel
+            </button>
+        </div>
+    </form>
+
+    <div class="resource-grid" id="resourceGrid">
+        <article class="resource-card" data-category="Notes" data-created="3">
+            <div class="resource-icon">📘</div>
+            <h3>Data Structures</h3>
+            <p>Notes and study materials for DSA.</p>
+            <span>Notes</span>
+        </article>
+
+        <article class="resource-card" data-category="Books" data-created="2">
+            <div class="resource-icon">📗</div>
+            <h3>Operating Systems</h3>
+            <p>Revision notes and important concepts.</p>
+            <span>Books</span>
+        </article>
+
+        <article class="resource-card" data-category="Lab Manuals" data-created="1">
+            <div class="resource-icon">📙</div>
+            <h3>Lab Manuals</h3>
+            <p>Practical references and lab preparation.</p>
+            <span>Lab Manuals</span>
+        </article>
+    </div>
+
+    <p id="noResults" hidden>No matching resources found.</p>
+</section>
+
+        
+        <section class="about" id="about">
+            <h2>Knowledge grows when we share.</h2>
+            <p>
+                CampusShare helps students discover and share
+                educational resources within their campus community.
+            </p>
+        </section>
+    </main>
+
+    <footer>
+        <p>© 2026 CampusShare. Built for students, by students.</p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
