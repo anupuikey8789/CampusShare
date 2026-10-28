@@ -1,0 +1,6 @@
+[submodule "BACKEND/Crow"]
+    path = BACKEND/Crow
+    url = https://github.com/CrowCpp/Crow.git
+[submodule "BACKEND/asio"]
+    path = BACKEND/asio
+    url = https://github.com/chriskohlhoff/asio.git

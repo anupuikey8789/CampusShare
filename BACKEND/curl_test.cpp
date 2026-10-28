@@ -1,36 +1,33 @@
 #include <iostream>
-#include <fstream>
 #include <string>
 #include <curl/curl.h>
+#include <cstdlib>
+
+static size_t WriteCallback(char* data, size_t size, size_t count, void* output)
+{
+    const size_t bytes = size * count;
+    static_cast<std::string*>(output)->append(data, bytes);
+    return bytes;
+}
 
 int main()
 {
-    std::ifstream config("E:/CampusShare/config.txt");
-
-    if (!config.is_open())
-    {
-        std::cout << "Failed to open config.txt\n";
-        return 1;
-    }
-
-    std::string line;
-    std::string supabaseUrl;
-    std::string supabaseKey;
-
-    while (std::getline(config, line))
-    {
-        if (line.find("SUPABASE_URL=") == 0)
-            supabaseUrl = line.substr(13);
-
-        else if (line.find("SUPABASE_KEY=") == 0)
-            supabaseKey = line.substr(13);
-    }
-
-    config.close();
+    const char* urlValue = std::getenv("SUPABASE_URL");
+    const char* keyValue = std::getenv("SUPABASE_ANON_KEY");
+    if (keyValue == nullptr)
+        keyValue = std::getenv("SUPABASE_KEY"); // legacy alias
+    const std::string supabaseUrl = urlValue == nullptr ? "" : urlValue;
+    const std::string supabaseKey = keyValue == nullptr ? "" : keyValue;
 
     if (supabaseUrl.empty() || supabaseKey.empty())
     {
-        std::cout << "Supabase URL or key is missing in config.txt\n";
+        std::cerr << "Set SUPABASE_URL and SUPABASE_ANON_KEY in the environment.\n";
+        return 1;
+    }
+
+    if (supabaseKey.rfind("sb_secret_", 0) == 0)
+    {
+        std::cerr << "Do not use a Supabase secret key in this utility.\n";
         return 1;
     }
 
@@ -43,6 +40,7 @@ int main()
     }
 
     std::string apiUrl = supabaseUrl + "/rest/v1/categories";
+    std::string responseBody;
 
     struct curl_slist* headers = nullptr;
 
@@ -51,8 +49,12 @@ int main()
 
     curl_easy_setopt(curl, CURLOPT_URL, apiUrl.c_str());
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, nullptr);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBody);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "CampusShare/1.0");
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
 
     CURLcode result = curl_easy_perform(curl);
 
@@ -65,7 +67,7 @@ int main()
     long statusCode = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &statusCode);
 
-    std::cout << "\nHTTP Status: " << statusCode << '\n';
+    std::cout << "\nHTTP Status: " << statusCode << '\n' << responseBody << '\n';
 
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);

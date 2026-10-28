@@ -1,2 +1,15 @@
-
 config.txt
+.env
+.env.*
+!.env.example
+
+build/
+build-*/
+CMakeFiles/
+CMakeCache.txt
+*.exe
+*.pdb
+*.ninja
+cmake_install.cmake
+CPack*.cmake
+CrowConfig.cmake
