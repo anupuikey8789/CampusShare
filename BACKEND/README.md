@@ -61,6 +61,8 @@ The repository contains no Supabase migrations/schema, RLS policy definitions, o
 
 Before expanding the API, provide the authoritative schema/migrations and decide whether user JWTs are sent to this backend or the frontend talks directly to Supabase. If this backend will authorize users, add token validation through Supabase Auth and enforce ownership with RLS and/or verified server-side identity. The current categories route uses the anon/publishable key and relies on Supabase grants/RLS to govern reads. Confirm that `categories` is readable to the intended audience and that RLS is enabled with suitable policies. No live Supabase request has been verified in this environment.
 
+See [`SUPABASE_SCHEMA_REQUIREMENTS.md`](SUPABASE_SCHEMA_REQUIREMENTS.md) for the schema-only export checklist and [`AUTHENTICATION.md`](AUTHENTICATION.md) for the proposed token and authorization contract. These documents describe what is needed; they do not claim that the project schema or authentication settings have been inspected or implemented.
+
 ## Running and stopping
 
 Run the executable from the `BACKEND` directory so it can read `.env`. Use Ctrl+C to stop the Crow server. The server emits a startup line and minimal framework warnings; it does not log request headers, bodies or secrets.

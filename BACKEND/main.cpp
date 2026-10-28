@@ -285,21 +285,30 @@ crow::response jsonError(int status, const std::string& code,
     return response;
 }
 
-void applyCors(const crow::request& request, crow::response& response,
-               const Config& config)
+struct CorsMiddleware
 {
-    const std::string origin = request.get_header_value("Origin");
-    if (std::find(config.allowedOrigins.begin(), config.allowedOrigins.end(), origin) !=
-        config.allowedOrigins.end())
+    struct context
     {
-        response.set_header("Access-Control-Allow-Origin", origin);
-        response.set_header("Vary", "Origin");
-        response.set_header("Access-Control-Allow-Methods", "GET, OPTIONS");
-        response.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-        response.set_header("Access-Control-Max-Age", "600");
+    };
+
+    std::vector<std::string> allowedOrigins;
+
+    void before_handle(crow::request&, crow::response&, context&) {}
+
+    void after_handle(crow::request& request, crow::response& response, context&)
+    {
+        const std::string origin = request.get_header_value("Origin");
+        if (std::find(allowedOrigins.begin(), allowedOrigins.end(), origin) != allowedOrigins.end())
+        {
+            response.set_header("Access-Control-Allow-Origin", origin);
+            response.set_header("Vary", "Origin");
+            response.set_header("Access-Control-Allow-Methods", "GET, OPTIONS");
+            response.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+            response.set_header("Access-Control-Max-Age", "600");
+        }
+        response.set_header("X-Content-Type-Options", "nosniff");
     }
-    response.set_header("X-Content-Type-Options", "nosniff");
-}
+};
 } // namespace
 
 int main()
@@ -313,34 +322,33 @@ int main()
         return 1;
     }
 
-    crow::SimpleApp app;
+    crow::App<CorsMiddleware> app;
+    app.get_middleware<CorsMiddleware>().allowedOrigins = config.allowedOrigins;
     app.loglevel(crow::LogLevel::Warning);
     SupabaseClient supabase(config);
 
     CROW_ROUTE(app, "/api/test")
-        ([&](const crow::request& request) {
+        ([]() {
             crow::json::wvalue body;
             body["status"] = "success";
             body["message"] = "Crow routes are working";
             crow::response response(body);
             response.set_header("Content-Type", "application/json; charset=utf-8");
-            applyCors(request, response, config);
             return response;
         });
 
     CROW_ROUTE(app, "/api/health")
-        ([&](const crow::request& request) {
+        ([]() {
             crow::json::wvalue body;
             body["status"] = "ok";
             body["service"] = "CampusShare backend";
             crow::response response(body);
             response.set_header("Content-Type", "application/json; charset=utf-8");
-            applyCors(request, response, config);
             return response;
         });
 
     CROW_ROUTE(app, "/api/categories")
-        ([&](const crow::request& request) {
+        ([&](const crow::request&) {
             const HttpResult upstream = supabase.get("/rest/v1/categories?select=*&limit=100");
             crow::response response;
             if (upstream.curlCode != CURLE_OK || upstream.status < 200 || upstream.status >= 300)
@@ -362,15 +370,15 @@ int main()
                     response.set_header("Content-Type", "application/json; charset=utf-8");
                 }
             }
-            applyCors(request, response, config);
             return response;
         });
 
-    CROW_ROUTE(app, "/api/<path>").methods(crow::HTTPMethod::Options)
-        ([&](const crow::request& request, const std::string&) {
-            crow::response response(204);
-            applyCors(request, response, config);
-            return response;
+    CROW_ROUTE(app, "/api/<path>")
+        .methods(crow::HTTPMethod::Get, crow::HTTPMethod::Post,
+                 crow::HTTPMethod::Put, crow::HTTPMethod::Patch,
+                 crow::HTTPMethod::Delete, crow::HTTPMethod::Options)
+        ([&](const crow::request&, const std::string&) {
+            return jsonError(404, "not_found", "API route not found.");
         });
 
     std::cout << "CampusShare backend listening on " << config.host << ':'

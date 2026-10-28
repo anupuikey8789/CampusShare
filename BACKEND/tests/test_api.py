@@ -42,9 +42,9 @@ def available_port():
         return sock.getsockname()[1]
 
 
-def request_json(url, origin=None):
+def request_json(url, origin=None, method=None, body=None):
     headers = {"Origin": origin} if origin else {}
-    request = urllib.request.Request(url, headers=headers)
+    request = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
         response = urllib.request.urlopen(request, timeout=3)
     except urllib.error.HTTPError as error:
@@ -162,6 +162,31 @@ def run():
         )
         assert status == 200
         assert headers.get("Access-Control-Allow-Origin") is None
+
+        status, headers, body = request_json(
+            base_url + "/api/unknown", "http://localhost:5500"
+        )
+        assert status == 404 and json.loads(body)["error"]["code"] == "not_found"
+        assert headers.get("Access-Control-Allow-Origin") == "http://localhost:5500"
+
+        status, _, body = request_json(
+            base_url + "/api/unknown", method="POST", body=b"{malformed"
+        )
+        assert status == 404 and json.loads(body)["error"]["code"] == "not_found"
+
+        status, headers, _ = request_json(
+            base_url + "/api/health", "http://localhost:5500", method="OPTIONS"
+        )
+        assert status == 204
+        assert headers.get("Access-Control-Allow-Origin") == "http://localhost:5500"
+        assert headers.get("Access-Control-Allow-Methods") == "GET, OPTIONS"
+        assert headers.get("Access-Control-Allow-Headers") == "Content-Type, Authorization"
+
+        status, headers, _ = request_json(
+            base_url + "/api/health", "http://untrusted.example", method="OPTIONS"
+        )
+        assert status == 204
+        assert headers.get("Access-Control-Allow-Origin") is None
     finally:
         if process.poll() is None:
             process.terminate()
@@ -170,7 +195,7 @@ def run():
         mock.server_close()
         mock_thread.join(timeout=2)
 
-    print("PASS: missing-config startup, health, test, categories mock, upstream errors, JSON validation, and CORS")
+    print("PASS: config, health/test, categories mock, upstream/JSON errors, unknown routes, and CORS")
 
 
 if __name__ == "__main__":
