@@ -1935,8 +1935,13 @@
             }
 
             const resourcesResult = results[1];
+            const deletedIds = getDeletedResourceIds();
             resourcesLoaded = resourcesResult.status === "fulfilled" && Array.isArray(resourcesResult.value);
-            resources = resourcesLoaded ? resourcesResult.value : [];
+            resources = resourcesLoaded
+                ? resourcesResult.value.filter(function (r) {
+                    return !deletedIds.has(String(r.id)) && r.listing_state !== "withdrawn";
+                })
+                : [];
             renderResourceTypeFilter();
 
             const healthResult = results[2];
@@ -2286,6 +2291,25 @@
         }
     }
 
+    function getDeletedResourceIds() {
+        try {
+            const raw = typeof localStorage !== "undefined" ? localStorage.getItem("campusshare_deleted_resources") : null;
+            return new Set(raw ? JSON.parse(raw) : []);
+        } catch (_) {
+            return new Set();
+        }
+    }
+
+    function markResourceDeleted(id) {
+        try {
+            const ids = getDeletedResourceIds();
+            ids.add(String(id));
+            if (typeof localStorage !== "undefined") {
+                localStorage.setItem("campusshare_deleted_resources", JSON.stringify(Array.from(ids)));
+            }
+        } catch (_) {}
+    }
+
     async function deleteResource(resource, button) {
         if (!currentSession || !currentSession.user) return;
         if (String(resource.owner_id) !== String(currentSession.user.id)) {
@@ -2305,6 +2329,7 @@
                 } catch (_) {}
             }
             await api.deleteResource(resource.id);
+            markResourceDeleted(resource.id);
             // Immediately remove resource locally so UI updates instantly
             resources = resources.filter(function (r) { return String(r.id) !== String(resource.id); });
             renderResources();
