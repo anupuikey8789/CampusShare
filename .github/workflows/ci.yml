@@ -1,0 +1,60 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-frontend:
+    name: Frontend Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Syntax Check
+        run: |
+          node --check FRONTEND/app.js
+          node --check FRONTEND/api.js
+          node --check FRONTEND/auth.js
+          node --check FRONTEND/ui-model.js
+          node --check FRONTEND/config.js
+
+      - name: Run Automated Test Suites
+        run: |
+          node FRONTEND/tests/app.test.cjs
+          node FRONTEND/tests/ui.test.cjs
+          node FRONTEND/tests/communication.test.cjs
+          node FRONTEND/tests/auth.test.cjs
+          node FRONTEND/tests/filter-redesign.test.cjs
+
+  verify-backend:
+    name: Backend Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libboost-all-dev libssl-dev libcurl4-openssl-dev
+
+      - name: Configure CMake
+        run: |
+          cd BACKEND
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Backend
+        run: |
+          cd BACKEND
+          cmake --build build --config Release

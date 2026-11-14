@@ -46,15 +46,30 @@ Open `http://localhost:5500`. Configure the Supabase Auth site and redirect URLs
 
 ```
 CampusShare/
-├── BACKEND/             # C++17 REST API service (Crow, Asio, libcurl)
-├── FRONTEND/            # Web client application (HTML, CSS, JS, tests)
-├── database/            # Supabase database scripts
-│   └── sql/             # Schema, migrations, RPCs, seeds, and validation SQL
-├── docs/                # Project documentation and specifications
-│   ├── architecture/    # Architecture & RPC API integration specifications
-│   ├── guides/          # Setup, deployment, migration, and testing guides
-│   └── reports/         # Task reports, security reviews, and audit logs
-└── README.md            # Project overview and quick start guide
+├── .github/                 # CI/CD pipelines (GitHub Actions)
+│   └── workflows/ci.yml     # Automated frontend testing & backend verification
+├── BACKEND/                 # C++17 REST API microservice (Crow, Asio, libcurl)
+│   ├── Dockerfile           # Multi-stage production container build
+│   ├── CMakeLists.txt       # Build system definition
+│   ├── main.cpp             # API routes & Crow daemon entrypoint
+│   └── tests/               # Python & C++ integration testing utilities
+├── FRONTEND/                # Lightweight Single Page Application (ES6, CSS3, HTML5)
+│   ├── assets/images/       # Static branding, hero banner & media assets
+│   ├── tests/               # Automated unit, integration, and UI test suites
+│   ├── index.html           # SPA entry point
+│   ├── style.css            # Responsive CSS3 styles & color variables
+│   └── *.js                 # Frontend application modules (app, api, auth, ui-model)
+├── database/                # Supabase database architecture
+│   ├── migrations/          # Ordered production DDL scripts (01_, 02_, etc.)
+│   ├── seeds/               # Initial reference data seeds (categories)
+│   └── archive/             # Staging, experimental, and audit scripts
+├── docs/                    # Project documentation
+│   ├── architecture/        # System design, RPC contracts, & authentication
+│   ├── guides/              # Setup, staging, deployment, and testing manuals
+│   └── reports/             # Verification, security reviews, and audit logs
+├── .editorconfig            # Cross-editor formatting specifications
+├── .gitignore               # Comprehensive VCS ignore rules
+└── README.md                # Project overview and quick start guide
 ```
 
 ## API overview
