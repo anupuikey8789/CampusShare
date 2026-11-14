@@ -86,27 +86,25 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE='42501', MESSAGE='Only the owner can delete this resource.';
     END IF;
 
-    -- Check for active / pending borrow requests
+    -- Check for ACTIVE ongoing loans (approved or return_requested)
     SELECT EXISTS (
         SELECT 1 FROM public.borrow_requests
         WHERE resource_id = p_resource_id
-          AND status IN ('pending', 'approved', 'return_requested')
+          AND status IN ('approved', 'return_requested')
     ) INTO v_has_active_borrow;
 
     IF v_has_active_borrow THEN
-        RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='Cannot delete listing with active or pending borrow requests. Please complete or reject them first.';
+        RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='This resource is currently on an active loan. Please confirm its return before deleting.';
     END IF;
 
-    -- Check for active / pending transfer requests (buy / donate)
-    SELECT EXISTS (
-        SELECT 1 FROM public.resource_transfer_requests
-        WHERE resource_id = p_resource_id
-          AND status IN ('pending', 'approved')
-    ) INTO v_has_active_transfer;
+    -- Automatically cancel any pending borrow or transfer requests since owner is deleting the listing
+    UPDATE public.borrow_requests
+    SET status = 'cancelled'
+    WHERE resource_id = p_resource_id AND status = 'pending';
 
-    IF v_has_active_transfer THEN
-        RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='Cannot delete listing with active or pending transfer requests. Please complete or reject them first.';
-    END IF;
+    UPDATE public.resource_transfer_requests
+    SET status = 'cancelled'
+    WHERE resource_id = p_resource_id AND status = 'pending';
 
     -- Check if resource is in terminal completed state
     IF v_listing_state IN ('sold', 'donated') THEN

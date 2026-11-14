@@ -1273,51 +1273,47 @@ int main()
             {
                 return crow::response(204);
             }
-            if (rpcResult.status >= 400 && rpcResult.status < 500 && rpcResult.body.find("Cannot delete") != std::string::npos)
+            if (rpcResult.status >= 400 && rpcResult.status < 500 && rpcResult.body.find("on an active loan") != std::string::npos)
             {
-                return rpcError(rpcResult, "Could not delete resource.");
+                return rpcError(rpcResult, "This resource is currently on an active loan. Please confirm its return before deleting.");
             }
 
-            // 2. Check for active or pending borrow requests
-            const HttpResult borrowCheck = supabase.postgrest(
+            // Fallback: direct PostgREST delete
+            // 2. Check for ACTIVE ongoing loans (approved or return_requested)
+            const HttpResult activeLoanCheck = supabase.postgrest(
                 "GET", "borrow_requests?select=id,status&resource_id=eq." + urlEncode(id) +
-                       "&status=in.(pending,approved,return_requested)&limit=1",
+                       "&status=in.(approved,return_requested)&limit=1",
                 tokenFromRequest(request));
-            if (borrowCheck.curlCode == CURLE_OK && borrowCheck.status >= 200 && borrowCheck.status < 300)
+            if (activeLoanCheck.curlCode == CURLE_OK && activeLoanCheck.status >= 200 && activeLoanCheck.status < 300)
             {
-                const auto bRows = crow::json::load(borrowCheck.body);
-                if (bRows && bRows.t() == crow::json::type::List && bRows.size() > 0)
+                const auto aRows = crow::json::load(activeLoanCheck.body);
+                if (aRows && aRows.t() == crow::json::type::List && aRows.size() > 0)
                 {
-                    return jsonError(409, "active_requests_exist",
-                                     "Cannot delete listing with active or pending borrow requests. Please complete or reject them first.");
+                    return jsonError(409, "active_loan_exists",
+                                     "This resource is currently on an active loan. Please confirm its return before deleting.");
                 }
             }
 
-            // 2. Check for active or pending transfer requests (buy / donate)
+            // 3. Cancel any pending borrow requests for this listing
+            crow::json::wvalue cancelPayload;
+            cancelPayload["status"] = "cancelled";
+            supabase.postgrest("PATCH", "borrow_requests?resource_id=eq." + urlEncode(id) + "&status=eq.pending",
+                               tokenFromRequest(request), cancelPayload.dump(), "return=minimal");
+
+            // 4. Cancel any pending transfer requests (buy / donate)
             if (config.useMarketplaceFeatures)
             {
-                const HttpResult transferCheck = supabase.postgrest(
-                    "GET", "resource_transfer_requests?select=id,status&resource_id=eq." + urlEncode(id) +
-                           "&status=in.(pending,approved)&limit=1",
-                    tokenFromRequest(request));
-                if (transferCheck.curlCode == CURLE_OK && transferCheck.status >= 200 && transferCheck.status < 300)
-                {
-                    const auto tRows = crow::json::load(transferCheck.body);
-                    if (tRows && tRows.t() == crow::json::type::List && tRows.size() > 0)
-                    {
-                        return jsonError(409, "active_requests_exist",
-                                         "Cannot delete listing with active or pending transfer requests. Please complete or reject them first.");
-                    }
-                }
+                supabase.postgrest("PATCH", "resource_transfer_requests?resource_id=eq." + urlEncode(id) + "&status=eq.pending",
+                                   tokenFromRequest(request), cancelPayload.dump(), "return=minimal");
             }
 
-            // 3. Remove dependent auxiliary records that have RESTRICT foreign keys
+            // 5. Remove dependent auxiliary records that have RESTRICT foreign keys
             supabase.postgrest("DELETE", "resource_handover_details?resource_id=eq." + urlEncode(id),
                                tokenFromRequest(request), {}, "return=minimal");
             supabase.postgrest("DELETE", "resource_images?resource_id=eq." + urlEncode(id),
                                tokenFromRequest(request), {}, "return=minimal");
 
-            // 4. Delete the resource row from resources
+            // 6. Delete the resource row from resources
             const HttpResult upstream = supabase.postgrest(
                 "DELETE", "resources?id=eq." + urlEncode(id), tokenFromRequest(request), {}, "return=minimal");
             if (upstream.curlCode != CURLE_OK || upstream.status < 200 || upstream.status >= 300)
@@ -1328,14 +1324,13 @@ int main()
                 {
                     crow::json::wvalue withdrawPayload;
                     withdrawPayload["availability_status"] = "unavailable";
+                    withdrawPayload["listing_state"] = "withdrawn";
                     const HttpResult patchResult = supabase.postgrest(
                         "PATCH", "resources?id=eq." + urlEncode(id),
                         tokenFromRequest(request), withdrawPayload.dump(), "return=minimal");
                     if (patchResult.curlCode == CURLE_OK && patchResult.status >= 200 && patchResult.status < 300)
                     {
-                        crow::response resp(200, "{\"message\":\"Resource withdrawn and archived.\"}");
-                        resp.set_header("Content-Type", "application/json; charset=utf-8");
-                        return resp;
+                        return crow::response(204);
                     }
                 }
                 return upstreamError(upstream, "Could not delete resource.");
