@@ -172,7 +172,7 @@
         const message = error && typeof error.message === "string" ? error.message : "";
         const status = error && Number(error.status);
         if (status === 429 || code === "over_email_send_rate_limit" || /email rate limit exceeded|too many requests/i.test(message)) {
-            return "Registration email limit reached. Please wait before trying again; repeated attempts will not send the email sooner. College and personal email addresses are supported.";
+            return "Registration email limit reached. Please wait before trying again; repeated attempts will not send the email sooner. If you already created an account, switch to 'Log in' to sign in directly with your password. College and personal email addresses are supported.";
         }
         return errorMessage(error);
     }
@@ -331,6 +331,16 @@
 
     function setAuthMode(mode) {
         const registering = mode === "register";
+        const sourceForm = registering ? loginForm : registerForm;
+        const targetForm = registering ? registerForm : loginForm;
+        if (sourceForm && targetForm) {
+            if (sourceForm.elements.email && targetForm.elements.email && sourceForm.elements.email.value) {
+                targetForm.elements.email.value = sourceForm.elements.email.value;
+            }
+            if (sourceForm.elements.password && targetForm.elements.password && sourceForm.elements.password.value) {
+                targetForm.elements.password.value = sourceForm.elements.password.value;
+            }
+        }
         loginForm.hidden = registering;
         registerForm.hidden = !registering;
         document.getElementById("showLogin").setAttribute("aria-selected", String(!registering));
@@ -1832,7 +1842,7 @@
         setStatus("");
         try {
             const dueInput = document.getElementById("borrowDueDate");
-            const dueAt = marketplaceEnabled && dueInput.value
+            const dueAt = marketplaceEnabled && dueInput && dueInput.value
                 ? new Date(`${dueInput.value}T23:59:59.000Z`).toISOString()
                 : null;
             await api.createBorrowRequest({ resource_id: resourceId, due_at: dueAt });
@@ -1947,9 +1957,29 @@
             if (mode === "register" && !fullName) {
                 throw new Error("Enter your full name to create your profile.");
             }
-            const result = mode === "register"
-                ? await auth.signUp(email, password, fullName)
-                : await auth.signIn(email, password);
+            let result;
+            if (mode === "register") {
+                result = await auth.signUp(email, password, fullName);
+                if (result && result.error) {
+                    const errStatus = Number(result.error.status);
+                    const errCode = result.error.code || "";
+                    const errMsg = result.error.message || "";
+                    const isRateLimitOrExisting = errStatus === 429 ||
+                        errCode === "over_email_send_rate_limit" ||
+                        errCode === "user_already_exists" ||
+                        /email rate limit exceeded|already registered|user already exists/i.test(errMsg);
+
+                    if (isRateLimitOrExisting && typeof auth.signIn === "function") {
+                        const fallbackLogin = await auth.signIn(email, password);
+                        if (fallbackLogin && !fallbackLogin.error && fallbackLogin.data && fallbackLogin.data.session) {
+                            result = fallbackLogin;
+                            mode = "login";
+                        }
+                    }
+                }
+            } else {
+                result = await auth.signIn(email, password);
+            }
             if (result.error) throw result.error;
 
             if (mode === "register" && result.data && result.data.user && !result.data.session) {

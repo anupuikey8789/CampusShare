@@ -738,8 +738,14 @@ crow::response rpcError(const HttpResult& result, const std::string& fallback)
     if (dbMessage == "due_at precedes request time" || dbMessage == "Invalid availability status" ||
         code == "22023" || code == "22P02" || code == "22007" || code == "23503" || code == "23514")
         return jsonError(400, "invalid_data", "Supabase rejected the supplied value.");
-    if (code == "PGRST202" || code == "PGRST204")
+    if (code == "PGRST202")
+    {
+        if (dbMessage.find("Could not find the function") != std::string::npos)
+            return jsonError(502, "rpc_missing", "The required Supabase RPC function is not installed in the database.");
         return jsonError(502, "rpc_unavailable", "The configured Supabase RPC is unavailable or has a different signature.");
+    }
+    if (code == "PGRST204")
+        return jsonError(502, "rpc_signature_mismatch", "The Supabase RPC function signature or parameters do not match.");
     if (result.status == 404)
         return jsonError(404, "not_found", "The requested record was not found.");
     return jsonError(422, "database_rejected", "Supabase rejected the operation.");

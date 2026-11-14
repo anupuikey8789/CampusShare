@@ -1,11 +1,12 @@
 // Public browser configuration. A publishable/legacy anon key is intended for client use;
 // never put a Supabase secret or service_role key here. Local values live in the
 // ignored config.local.js file and are merged below.
+const defaultHost = (typeof window !== "undefined" && window.location && window.location.hostname) ? window.location.hostname : "127.0.0.1";
 window.CAMPUSSHARE_LOCAL_CONFIG_OVERRIDE = window.CAMPUSSHARE_CONFIG || null;
 window.CAMPUSSHARE_CONFIG = {
     supabaseUrl: "https://jxndjuslvccxgayoachm.supabase.co",
     supabasePublishableKey: "sb_publishable_q1QUzaFWb3xW7bL-2bCkyQ_K5BBCa6_",
-    apiBase: "http://127.0.0.1:18080"
+    apiBase: "http://" + defaultHost + ":18080"
 };
 
 (function (window) {
