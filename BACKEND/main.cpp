@@ -869,7 +869,8 @@ int main()
     SupabaseClient supabase(config);
     const auto verifyResourceOwner = [&](const crow::request& request,
                                          const std::string& resourceId,
-                                         const std::string& userId) -> std::optional<crow::response> {
+                                         const std::string& userId,
+                                         const std::string& customForbidden = {}) -> std::optional<crow::response> {
         const HttpResult upstream = supabase.postgrest(
             "GET", "resources?select=id,owner_id&id=eq." + urlEncode(resourceId) + "&limit=1",
             tokenFromRequest(request));
@@ -883,7 +884,7 @@ int main()
         if (!rows[0].has("owner_id") || rows[0]["owner_id"].t() != crow::json::type::String)
             return jsonError(502, "invalid_upstream_response", "Supabase returned incomplete resource data.");
         if (rows[0]["owner_id"].s() != userId)
-            return jsonError(403, "forbidden", "You may change only resources you own.");
+            return jsonError(403, "forbidden", customForbidden.empty() ? "You may change only resources you own." : customForbidden);
         return std::nullopt;
     };
 
@@ -1257,10 +1258,27 @@ int main()
             const AuthResult auth = supabase.verifyAccessToken(request.get_header_value("Authorization"));
             if (!auth.verified)
                 return authenticationError(auth);
-            if (auto ownerError = verifyResourceOwner(request, id, auth.userId))
+            if (auto ownerError = verifyResourceOwner(request, id, auth.userId, "Only the owner can delete this resource."))
                 return std::move(*ownerError);
 
-            // 1. Check for active or pending borrow requests
+            const auto numericId = parsePositiveBigint(id);
+            if (!numericId.has_value())
+                return jsonError(400, "invalid_request", "resource id must be a positive bigint.");
+
+            // 1. Try atomic RPC if available in database
+            crow::json::wvalue rpcParams;
+            rpcParams["p_resource_id"] = *numericId;
+            const HttpResult rpcResult = supabase.rpc("delete_resource_atomic", tokenFromRequest(request), rpcParams.dump());
+            if (rpcResult.curlCode == CURLE_OK && rpcResult.status >= 200 && rpcResult.status < 300)
+            {
+                return crow::response(204);
+            }
+            if (rpcResult.status >= 400 && rpcResult.status < 500 && rpcResult.body.find("Cannot delete") != std::string::npos)
+            {
+                return rpcError(rpcResult, "Could not delete resource.");
+            }
+
+            // 2. Check for active or pending borrow requests
             const HttpResult borrowCheck = supabase.postgrest(
                 "GET", "borrow_requests?select=id,status&resource_id=eq." + urlEncode(id) +
                        "&status=in.(pending,approved,return_requested)&limit=1",

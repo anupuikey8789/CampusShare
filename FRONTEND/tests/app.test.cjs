@@ -1278,3 +1278,30 @@ test("My Resources tabs switch cleanly between My Borrow, My Sell, and My Donate
     assert.equal(harness.get("resourceGrid").children.length, 1);
     assert.match(collectText(harness.get("resourceGrid")), /Donate Desk/);
 });
+
+test("owner-only delete permission: Account A can delete, Account B and C cannot see delete button and are rejected", async () => {
+    // 1. Account A (owner: student-a)
+    const harnessA = createHarness({ session: { access_token: "token-a", user: { id: "student-a", email: "student.a@vit.edu" } } });
+    await settle();
+    harnessA.get("myResourcesNav").dispatch("click");
+    await settle();
+    const cardA = findCardForTitle(harnessA.get("resourceGrid"), "Algorithms");
+    const deleteBtnA = findButton(cardA, "Delete");
+    assert.ok(deleteBtnA, "Owner Account A must see Delete button");
+
+    // 2. Account B (student-b)
+    const harnessB = createHarness({ session: { access_token: "token-b", user: { id: "student-b", email: "student.b@vit.edu" } } });
+    await settle();
+    harnessB.get("browseNav").dispatch("click");
+    await settle();
+    const cardB = findCardForTitle(harnessB.get("resourceGrid"), "Algorithms");
+    assert.equal(findButton(cardB, "Delete"), null, "Non-owner Account B must not see Delete button");
+
+    // 3. Account C (unrelated: student-c)
+    const harnessC = createHarness({ session: { access_token: "token-c", user: { id: "student-c", email: "student.c@vit.edu" } } });
+    await settle();
+    harnessC.get("browseNav").dispatch("click");
+    await settle();
+    const cardC = findCardForTitle(harnessC.get("resourceGrid"), "Algorithms");
+    assert.equal(findButton(cardC, "Delete"), null, "Unrelated Account C must not see Delete button");
+});

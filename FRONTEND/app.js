@@ -717,9 +717,9 @@
                 resourceDetailsDialog.close();
                 openResourceForm(resource);
             }));
-            resourceDetailsActions.appendChild(makeActionButton("Delete listing", "danger-btn", function () {
+            resourceDetailsActions.appendChild(makeActionButton("Delete listing", "danger-btn", function (event) {
                 resourceDetailsDialog.close();
-                deleteResource(resource);
+                deleteResource(resource, event.currentTarget);
             }));
         } else if (resource.availability_status === "available") {
             if (marketplaceEnabled && (resource.listing_mode === "sell" || resource.listing_mode === "donate") && resource.listing_state === "active") {
@@ -848,8 +848,8 @@
                 actions.appendChild(makeActionButton("Edit", "secondary-btn", function () {
                     openResourceForm(resource);
                 }));
-                actions.appendChild(makeActionButton("Delete", "danger-btn", function () {
-                    deleteResource(resource);
+                actions.appendChild(makeActionButton("Delete", "danger-btn", function (event) {
+                    deleteResource(resource, event.currentTarget);
                 }));
             } else if (marketplaceEnabled && !isOwner && resource.availability_status === "available" && resource.listing_state === "active" &&
                 (resource.listing_mode === "sell" || resource.listing_mode === "donate") && !hasActiveTransferRequest(resource.id)) {
@@ -1945,18 +1945,30 @@
         }
     }
 
-    async function deleteResource(resource) {
-        if (!currentSession || String(resource.owner_id) !== String(currentSession.user.id)) return;
+    async function deleteResource(resource, button) {
+        if (!currentSession || !currentSession.user) return;
+        if (String(resource.owner_id) !== String(currentSession.user.id)) {
+            setStatus("Only the owner can delete this resource.", "error");
+            return;
+        }
         if (!window.confirm(`Delete “${resource.title}”? This cannot be undone.`)) return;
+        if (button) setButtonBusy(button, true, "Deleting…");
         setStatus("Deleting resource…");
         try {
             if (resourceImagesEnabled) {
-                const imageRows = await api.resourceImages(resource.id);
-                if (imageRows.length) {
-                    for (const row of imageRows) await api.deleteResourceImage(row.id);
-                }
+                try {
+                    const imageRows = await api.resourceImages(resource.id);
+                    if (imageRows.length) {
+                        for (const row of imageRows) await api.deleteResourceImage(row.id);
+                    }
+                } catch (_) {}
             }
             await api.deleteResource(resource.id);
+            // Immediately remove resource locally so UI updates instantly
+            resources = resources.filter(function (r) { return String(r.id) !== String(resource.id); });
+            renderResources();
+            renderDashboard();
+
             const refreshed = await loadLibrary();
             setStatus(
                 refreshed ? "Resource deleted." : "Resource deleted, but some updated data could not be refreshed.",
@@ -1964,6 +1976,8 @@
             );
         } catch (error) {
             setStatus(errorMessage(error), "error");
+        } finally {
+            if (button && button.isConnected) setButtonBusy(button, false);
         }
     }
 
