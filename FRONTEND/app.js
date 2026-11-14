@@ -142,6 +142,7 @@
     let categories = [];
     let categoryLoadState = "idle";
     let resources = [];
+    const resourceMetadataCache = new Map();
     let borrowingRequests = [];
     let resourcesLoaded = false;
     let requestsLoaded = false;
@@ -1576,7 +1577,7 @@
     function makeRequestCard(request, isOwnerView) {
         const resource = resources.find(function (item) {
             return String(item.id) === String(request.resource_id);
-        });
+        }) || resourceMetadataCache.get(String(request.resource_id));
         const card = document.createElement("article");
         card.className = "borrow-request-card";
         const title = document.createElement("h4");
@@ -1723,7 +1724,7 @@
     }
 
     function makeTransferCard(request, ownerView) {
-        const resource = resources.find(function (item) { return String(item.id) === String(request.resource_id); });
+        const resource = resources.find(function (item) { return String(item.id) === String(request.resource_id); }) || resourceMetadataCache.get(String(request.resource_id));
         const card = document.createElement("article");
         card.className = "borrow-request-card";
         const title = document.createElement("h4");
@@ -1937,9 +1938,17 @@
             const resourcesResult = results[1];
             const deletedIds = getDeletedResourceIds();
             resourcesLoaded = resourcesResult.status === "fulfilled" && Array.isArray(resourcesResult.value);
+            if (resourcesLoaded) {
+                resourcesResult.value.forEach(function (r) {
+                    resourceMetadataCache.set(String(r.id), r);
+                });
+            }
             resources = resourcesLoaded
                 ? resourcesResult.value.filter(function (r) {
-                    return !deletedIds.has(String(r.id)) && r.listing_state !== "withdrawn";
+                    return !deletedIds.has(String(r.id)) &&
+                           r.listing_state !== "withdrawn" &&
+                           r.listing_state !== "sold" &&
+                           r.listing_state !== "donated";
                 })
                 : [];
             renderResourceTypeFilter();
