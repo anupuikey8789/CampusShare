@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(CampusShareBackend VERSION 1.0.0 LANGUAGES CXX)
 
+string(TIMESTAMP CAMPUSSHARE_BUILD_TIMESTAMP_UTC "%Y%m%dT%H%M%SZ" UTC)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -22,7 +24,10 @@ target_include_directories(campusshare_backend SYSTEM PRIVATE
     "${CROW_INCLUDE_DIR}"
     "${ASIO_INCLUDE_DIR}"
 )
-target_compile_definitions(campusshare_backend PRIVATE ASIO_STANDALONE)
+target_compile_definitions(campusshare_backend PRIVATE
+    ASIO_STANDALONE
+    "CAMPUSSHARE_API_VERSION=\"${PROJECT_VERSION}\""
+    "CAMPUSSHARE_BUILD_ID=\"${PROJECT_VERSION}-${CAMPUSSHARE_BUILD_TIMESTAMP_UTC}\"")
 target_link_libraries(campusshare_backend PRIVATE CURL::libcurl Threads::Threads)
 if(WIN32)
     target_compile_definitions(campusshare_backend PRIVATE _WIN32_WINNT=0x0A00)

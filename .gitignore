@@ -1,0 +1,28 @@
+﻿# Environment and secrets
+.env
+.env.*
+!.env.example
+config.local.js
+config.txt
+
+# Build outputs
+build/
+build-*/
+CMakeFiles/
+CMakeCache.txt
+*.exe
+*.pdb
+*.obj
+*.dll
+*.lib
+*.ninja
+
+# IDE settings
+.vscode/
+.idea/
+
+# Logs and temporary files
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

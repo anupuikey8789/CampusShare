@@ -9,21 +9,45 @@
 </head>
 <body>
 
-    <header class="navbar">
-        <h2 class="logo">CampusShare</h2>
-
-        <nav>
-            <a href="#home">Home</a>
-            <a href="#resources">Resources</a>
-            <a href="#about">About</a>
+    <div class="app-shell">
+    <aside id="appSidebar" class="app-sidebar" aria-label="CampusShare sidebar">
+        <a href="#home" class="sidebar-brand" aria-label="CampusShare home">
+            <span class="brand-mark" aria-hidden="true">C</span>
+            <span><strong>CampusShare</strong><small>Student Resource Hub</small></span>
+        </a>
+        <nav class="sidebar-nav" aria-label="Main navigation">
+            <a href="#home" id="homeNav"><span aria-hidden="true">⌂</span>Home</a>
+            <a href="#dashboard" id="dashboardNav" hidden><span aria-hidden="true">▦</span>Dashboard</a>
+            <a href="#browse" id="browseNav"><span aria-hidden="true">⌕</span>Browse Resources</a>
+            <a href="#sell" id="sellNav"><span aria-hidden="true">₹</span>Sell</a>
+            <a href="#donate" id="donateNav"><span aria-hidden="true">♡</span>Donate</a>
+            <a href="#my-resources" id="myResourcesNav" hidden><span aria-hidden="true">▤</span>My Resources</a>
+            <a href="#borrowing" id="requestsNav" hidden><span aria-hidden="true">↗</span>Borrowing</a>
+            <a href="#about" id="aboutNav"><span aria-hidden="true">ⓘ</span>About</a>
         </nav>
-
-        <button class="login-btn">Login</button>
+        <div id="sidebarProfile" class="sidebar-profile" hidden>
+            <span id="sidebarAvatar" class="profile-avatar" aria-hidden="true">S</span>
+            <span class="profile-copy"><strong id="sidebarStudentName">Student</strong><small id="sidebarStudentEmail"></small></span>
+        </div>
+    </aside>
+    <button id="sidebarBackdrop" class="sidebar-backdrop" type="button" aria-label="Close navigation" hidden></button>
+    <div class="app-main">
+    <header class="topbar">
+        <div class="topbar-leading">
+            <button id="mobileNavToggle" class="mobile-nav-toggle" type="button" aria-label="Open navigation" aria-controls="appSidebar" aria-expanded="false">☰</button>
+            <a href="#home" class="topbar-brand" aria-label="CampusShare home"><span class="brand-mark" aria-hidden="true">C</span><strong>CampusShare</strong></a>
+        </div>
+        <h1 id="topbarPageTitle" class="topbar-page-title">Home</h1>
+        <div class="topbar-account">
+            <span class="topbar-profile-copy"><span id="topbarStudentName" class="topbar-student-name" hidden>Student</span><small id="topbarStudentEmail" class="topbar-student-email" hidden></small></span>
+            <span id="topbarAvatar" class="profile-avatar topbar-avatar" aria-hidden="true" hidden>S</span>
+            <button class="login-btn" id="authButton" type="button" aria-haspopup="dialog">Log in</button>
+        </div>
     </header>
 
     <main>
-       
-<section class="hero" id="home">
+
+<section class="hero page-view" id="home" data-route-view="home">
     <div class="hero-content">
         <p class="tagline">YOUR CAMPUS. YOUR COMMUNITY.</p>
 
@@ -37,18 +61,103 @@
             fellow students succeed. Learning is better together.
         </p>
 
-        <a href="#resources" class="primary-btn">
+        <a href="#browse" class="primary-btn">
             Explore Resources →
         </a>
+        <div class="hero-marketplace-actions" aria-label="Marketplace options">
+            <a href="#sell" class="secondary-btn">Sell an item</a>
+            <a href="#donate" class="secondary-btn">Donate a resource</a>
+        </div>
     </div>
 </section>
 
 
+<section class="dashboard page-view" id="dashboard" data-route-view="dashboard" hidden aria-labelledby="dashboardTitle">
+    <div class="dashboard-content">
+        <div class="dashboard-heading">
+            <div>
+                <p class="tagline">YOUR CAMPUSSHARE</p>
+                <h1 id="dashboardTitle">Welcome back, <span id="dashboardStudentName">Student</span>!</h1>
+                <p class="dashboard-caption">Your campus sharing activity at a glance.</p>
+            </div>
+        </div>
+
+        <section class="dashboard-welcome" aria-labelledby="welcomeSummaryTitle">
+            <span class="welcome-summary-icon" aria-hidden="true">✦</span>
+            <div class="welcome-summary-content">
+                <div class="welcome-summary-heading"><h2 id="welcomeSummaryTitle">Your CampusShare snapshot</h2><span class="snapshot-badge">Updated from your account</span></div>
+                <p id="welcomeSummary" aria-live="polite">Your resources and borrowing activity will appear here.</p>
+                <div class="welcome-summary-tags">
+                    <span id="welcomeAvailableSummary">Loading available resources…</span>
+                    <span id="welcomeRequestSummary">Loading borrowing requests…</span>
+                </div>
+            </div>
+        </section>
+
+        <div class="stat-grid" aria-live="polite" aria-busy="false">
+            <article class="stat-card"><div><p>Your resources</p><strong id="statMyResources">—</strong></div><span class="stat-icon stat-icon-purple" aria-hidden="true">▤</span></article>
+            <article class="stat-card"><div><p>Available resources</p><strong id="statAvailableResources">—</strong></div><span class="stat-icon stat-icon-orange" aria-hidden="true">✓</span></article>
+            <article class="stat-card"><div><p>Pending requests</p><strong id="statPendingRequests">—</strong></div><span class="stat-icon stat-icon-green" aria-hidden="true">◷</span></article>
+            <article class="stat-card"><div><p>Approved loans</p><strong id="statApprovedRequests">—</strong></div><span class="stat-icon stat-icon-blue" aria-hidden="true">↗</span></article>
+        </div>
+        <section id="marketplaceDashboardSummary" class="marketplace-dashboard-summary" aria-label="Marketplace activity" hidden>
+            <h2>Marketplace summary</h2>
+            <dl>
+                <div><dt>Active borrow listings</dt><dd id="statActiveBorrowListings">—</dd></div>
+                <div><dt>Active sale listings</dt><dd id="statActiveSellListings">—</dd></div>
+                <div><dt>Active donations</dt><dd id="statActiveDonateListings">—</dd></div>
+                <div><dt>Incoming requests</dt><dd id="statIncomingRequests">—</dd></div>
+                <div><dt>Outgoing requests</dt><dd id="statOutgoingRequests">—</dd></div>
+                <div><dt>Borrow returns completed</dt><dd id="statCompletedBorrowReturns">—</dd></div>
+                <div><dt>Sales completed</dt><dd id="statCompletedSales">—</dd></div>
+                <div><dt>Donations completed</dt><dd id="statCompletedDonations">—</dd></div>
+            </dl>
+            <small>Counts reflect records currently returned by the backend (up to 100 rows per list).</small>
+        </section>
+        <p class="dashboard-data-note">Counts reflect rows currently loaded from the backend (up to 100 per list).</p>
+
+        <div class="dashboard-panel-grid">
+            <section class="dashboard-panel quick-panel" aria-labelledby="quickActionsTitle">
+                <div class="panel-heading"><h2 id="quickActionsTitle">Quick Actions</h2></div>
+                <button type="button" id="dashboardAddResource" class="quick-action"><span class="quick-action-icon">＋</span><span><strong>Add resource</strong><small>Share a resource with your campus</small></span><b>→</b></button>
+                <button type="button" id="quickBrowse" class="quick-action"><span class="quick-action-icon">⌕</span><span><strong>Browse resources</strong><small>Find items shared by students</small></span><b>→</b></button>
+                <button type="button" id="dashboardMyResources" class="quick-action"><span class="quick-action-icon">▤</span><span><strong>My resources</strong><small>Manage your listings</small></span><b>→</b></button>
+                <button type="button" id="quickMyRequests" class="quick-action"><span class="quick-action-icon">↗</span><span><strong>My borrow requests</strong><small>Check requests you sent</small></span><b>→</b></button>
+                <button type="button" id="quickReceivedRequests" class="quick-action"><span class="quick-action-icon">↙</span><span><strong>Requests received</strong><small>Review activity on your listings</small></span><b>→</b></button>
+                <button type="button" id="quickSell" class="quick-action"><span class="quick-action-icon">₹</span><span><strong>Sell an item</strong><small>Open the fixed-price marketplace</small></span><b>→</b></button>
+                <button type="button" id="quickDonate" class="quick-action"><span class="quick-action-icon">♡</span><span><strong>Donate a resource</strong><small>Share something for free</small></span><b>→</b></button>
+            </section>
+            <section class="dashboard-panel" aria-labelledby="recentResourcesTitle">
+                <div class="panel-heading"><h2 id="recentResourcesTitle">Recent Resources</h2><button type="button" id="dashboardViewAllResources" class="text-btn">View all →</button></div>
+                <p id="recentResourcesEmpty" class="dashboard-empty" hidden>You have not listed a resource yet.</p>
+                <div id="recentResources" class="recent-resource-list"></div>
+            </section>
+            <section class="dashboard-panel" aria-labelledby="myActivityTitle">
+                <div class="panel-heading"><h2 id="myActivityTitle">My Activity</h2><button type="button" id="dashboardViewBorrowing" class="text-btn">Borrowing →</button></div>
+                <p id="myActivityEmpty" class="dashboard-empty" hidden>No borrowing activity is available yet.</p>
+                <div id="myActivityList" class="activity-list" aria-live="polite"></div>
+            </section>
+        </div>
+        <section class="dashboard-tips" aria-labelledby="tipsTitle">
+            <div class="tips-icon" aria-hidden="true">✦</div>
+            <div class="tips-heading"><h2 id="tipsTitle">Tips for You</h2><p>Small ways to make sharing easier.</p></div>
+            <ul class="tips-list">
+                <li>Use a clear title and description so students know what you are sharing.</li>
+                <li>Keep each listing’s availability up to date.</li>
+                <li>Check Borrowing for updates on requests you sent or received.</li>
+            </ul>
+        </section>
+    </div>
+</section>
+
+
+<section class="page-view resources-page" id="browsePage" data-route-view="browse" hidden>
+<div id="browseResourcesMount">
 <section class="resources" id="resources">
     <div class="section-heading">
         <p class="tagline">YOUR LEARNING LIBRARY</p>
-        <h2>Explore Resources</h2>
-        <p>Find and share useful materials with fellow students.</p>
+        <h2 id="resourcesPageHeading">Explore Resources</h2>
+        <p id="resourcesPageDescription">Find and share useful materials with fellow students.</p>
     </div>
 
     <div class="resource-controls">
@@ -61,25 +170,61 @@
 
         <select id="categoryFilter" aria-label="Filter by category">
             <option value="all">All Categories</option>
-            <option value="Books">Books</option>
-            <option value="Notes">Notes</option>
-            <option value="Lab Manuals">Lab Manuals</option>
-            <option value="Equipment">Equipment</option>
+        </select>
+
+        <select id="resourceTypeFilter" aria-label="Filter by resource type">
+            <option value="all">Any resource type</option>
+        </select>
+
+        <select id="listingModeFilter" aria-label="Filter by listing type" hidden>
+            <option value="all">All listing types</option>
+            <option value="borrow">Borrow / lend</option>
+            <option value="sell">Sell</option>
+            <option value="donate">Donate</option>
+        </select>
+
+        <select id="availabilityFilter" aria-label="Filter by availability">
+            <option value="all">Any availability</option>
+            <option value="available">Available</option>
+            <option value="unavailable">Unavailable</option>
+        </select>
+
+        <input id="priceMinFilter" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Min price ₹" aria-label="Minimum listing price" hidden>
+        <input id="priceMaxFilter" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Max price ₹" aria-label="Maximum listing price" hidden>
+        <select id="conditionFilter" aria-label="Filter by item condition" hidden>
+            <option value="all">Any condition</option>
+            <option value="new">New</option>
+            <option value="like_new">Like new</option>
+            <option value="good">Good</option>
+            <option value="fair">Fair</option>
         </select>
 
         <select id="sortSelect" aria-label="Sort resources">
             <option value="newest">Newest First</option>
             <option value="title">Title: A–Z</option>
+            <option value="price-low">Price: low to high</option>
+            <option value="price-high">Price: high to low</option>
         </select>
     </div>
 
     <div class="resource-summary">
-        <p id="resourceCount">3 resources available</p>
-        <button type="button" id="showAddForm">+ Add Resource</button>
+        <div class="resource-summary-copy">
+            <h3 id="resourceViewTitle">Browse resources</h3>
+            <p id="resourceCount" aria-live="polite">Log in to view resources.</p>
+        </div>
+        <div class="resource-summary-actions">
+            <button type="button" id="clearFilters" class="secondary-btn">Clear filters</button>
+            <button type="button" id="refreshLibrary" class="secondary-btn">Refresh</button>
+            <button type="button" id="showAddForm" hidden>+ Add Resource</button>
+        </div>
     </div>
 
+    <p id="resourceStatus" class="resource-status" role="status" aria-live="polite"></p>
+    <p id="authConfigNote" class="auth-config-note" role="status" aria-live="polite" hidden>Supabase Auth is not configured. Copy <code>FRONTEND/config.local.example.js</code> to <code>FRONTEND/config.local.js</code> and set the staging project URL and publishable key.</p>
+
     <form id="resourceForm" class="resource-form" hidden>
-        <h3>Add a Resource</h3>
+        <h3 id="resourceFormHeading">Add a Resource</h3>
+        <p id="resourceFormStatus" class="resource-status form-status" role="status" aria-live="polite" hidden></p>
 
         <label for="resourceTitle">Resource title</label>
         <input id="resourceTitle" type="text" maxlength="100"
@@ -91,61 +236,248 @@
 
         <label for="resourceCategory">Category</label>
         <select id="resourceCategory" required>
-            <option value="Books">Books</option>
-            <option value="Notes">Notes</option>
-            <option value="Lab Manuals">Lab Manuals</option>
-            <option value="Equipment">Equipment</option>
+            <option value="">Choose a category</option>
         </select>
 
+        <label for="resourceType">Resource type</label>
+        <input id="resourceType" type="text" maxlength="80" required
+               placeholder="Describe the type of material">
+
+        <label for="resourceAvailability">Availability</label>
+        <select id="resourceAvailability" required>
+            <option value="available">Available</option>
+            <option value="unavailable">Unavailable</option>
+        </select>
+
+        <section id="resourceImageSection" class="resource-image-section" aria-labelledby="resourceImagesLabel">
+            <label id="resourceImagesLabel" for="resourceImages">Photos (up to 10, JPEG/PNG/WebP, 5 MiB each; first photo is the primary image)</label>
+            <input id="resourceImages" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+            <div id="imagePreviewList" class="image-preview-list" aria-live="polite"></div>
+            <div id="existingImageList" class="image-preview-list" aria-live="polite"></div>
+            <p id="imageUploadAvailabilityNote" class="workflow-note" role="status" aria-live="polite" hidden></p>
+        </section>
+
+        <fieldset id="marketplaceFields" hidden>
+            <legend>How students can get this resource</legend>
+            <label for="listingMode">Listing type</label>
+            <select id="listingMode">
+                <option value="borrow">Borrow / lend</option>
+                <option value="sell">Sell</option>
+                <option value="donate">Donate</option>
+            </select>
+            <div id="borrowPriceFields">
+                <label for="borrowPriceKind">Borrow price</label>
+                <select id="borrowPriceKind">
+                    <option value="free">Free</option>
+                    <option value="fixed">One-time charge</option>
+                    <option value="per_day">Per day</option>
+                    <option value="per_week">Per week</option>
+                </select>
+                <label for="borrowPriceAmount">Charge (if not free)</label>
+                <input id="borrowPriceAmount" type="number" min="0.01" step="0.01" inputmode="decimal">
+            </div>
+            <div id="saleFields" hidden>
+                <label for="saleOriginalPrice">Original purchase price</label>
+                <input id="saleOriginalPrice" type="number" min="0.01" step="0.01" inputmode="decimal">
+                <label for="salePrice">Selling price</label>
+                <input id="salePrice" type="number" min="0.01" step="0.01" inputmode="decimal">
+                <label for="itemCondition">Condition</label>
+                <select id="itemCondition"><option value="new">New / unused</option><option value="like_new">Like new</option><option value="good">Good</option><option value="fair">Fair</option></select>
+                <label for="purchaseYear">Purchase year</label>
+                <input id="purchaseYear" type="number" min="1900" step="1">
+            </div>
+            <label for="pickupLocation">Campus pickup location</label>
+            <input id="pickupLocation" type="text" maxlength="160" placeholder="e.g. Campus library">
+            <label for="meetingPoint">Preferred meeting point</label>
+            <input id="meetingPoint" type="text" maxlength="160" placeholder="e.g. Main library entrance">
+            <label for="preferredPickupTime">Preferred meeting time</label>
+            <input id="preferredPickupTime" type="text" maxlength="160" placeholder="Optional">
+            <label for="handoverInstructions">Handover instructions</label>
+            <textarea id="handoverInstructions" maxlength="1000" placeholder="Optional; do not enter a home address"></textarea>
+            <small>Pickup and meeting details are private. They are visible to the listing owner and a requester only after an eligible request is approved or completed.</small>
+            <p class="payment-disclaimer">CampusShare does not process or verify payments. Students arrange any payment directly.</p>
+        </fieldset>
+
         <div class="form-actions">
-            <button type="submit">Add Resource</button>
+            <button type="submit" id="resourceSaveButton">Add Resource</button>
             <button type="button" id="cancelAddForm" class="secondary-btn">
                 Cancel
             </button>
         </div>
     </form>
 
-    <div class="resource-grid" id="resourceGrid">
-        <article class="resource-card" data-category="Notes" data-created="3">
-            <div class="resource-icon">📘</div>
-            <h3>Data Structures</h3>
-            <p>Notes and study materials for DSA.</p>
-            <span>Notes</span>
-        </article>
+    <div class="resource-grid" id="resourceGrid" aria-live="polite"></div>
 
-        <article class="resource-card" data-category="Books" data-created="2">
-            <div class="resource-icon">📗</div>
-            <h3>Operating Systems</h3>
-            <p>Revision notes and important concepts.</p>
-            <span>Books</span>
-        </article>
-
-        <article class="resource-card" data-category="Lab Manuals" data-created="1">
-            <div class="resource-icon">📙</div>
-            <h3>Lab Manuals</h3>
-            <p>Practical references and lab preparation.</p>
-            <span>Lab Manuals</span>
-        </article>
+    <div id="noResults" class="empty-state" hidden>
+        <span class="empty-icon" aria-hidden="true">⌕</span>
+        <h3 id="emptyTitle">No resources found</h3>
+        <p id="emptyMessage"></p>
+        <button type="button" id="emptyAddResource" class="primary-btn" hidden>+ Add your first resource</button>
     </div>
 
-    <p id="noResults" hidden>No matching resources found.</p>
+    </section>
+</div>
 </section>
 
-        
-        <section class="about" id="about">
+<section class="page-view resources-page" id="myResourcesPage" data-route-view="my-resources" hidden>
+    <div id="myResourcesMount"></div>
+</section>
+
+<section class="page-view resources-page marketplace-page" id="sellPage" data-route-view="sell" hidden>
+    <div class="marketplace-page-intro"><p class="tagline">CAMPUS MARKETPLACE</p><h2>Sell Resources</h2><p>Browse fixed-price listings. Payment is arranged directly between students; CampusShare does not process or verify it.</p><p id="sellMarketplaceNote" class="workflow-note" hidden>Sell listings are unavailable until the reviewed marketplace setup is applied and verified in Staging.</p></div>
+    <div id="sellResourcesMount"></div>
+</section>
+
+<section class="page-view resources-page marketplace-page" id="donatePage" data-route-view="donate" hidden>
+    <div class="marketplace-page-intro"><p class="tagline">SHARE WITH YOUR CAMPUS</p><h2>Donate Resources</h2><p>Find resources students have offered as free permanent transfers.</p><p id="donateMarketplaceNote" class="workflow-note" hidden>Donation listings are unavailable until the reviewed marketplace setup is applied and verified in Staging.</p></div>
+    <div id="donateResourcesMount"></div>
+</section>
+
+    <section id="borrowRequestsSection" class="borrow-requests page-view" data-route-view="borrowing" hidden>
+        <div class="section-heading">
+            <p class="tagline">BORROWING ACTIVITY</p>
+            <h2>Borrowing Requests</h2>
+            <p>Requests visible to you are filtered by your Supabase permissions.</p>
+        </div>
+        <p id="borrowStatus" class="resource-status" role="status" aria-live="polite"></p>
+        <p id="borrowCreationNote" class="workflow-note" role="status" aria-live="polite" hidden>Borrow request submission is disabled until the secure staging RPC is installed and verified.</p>
+        <p id="borrowStatusFeatureNote" class="workflow-note" role="status" hidden>Owner actions are disabled until the staging RPCs and availability permission cutover are verified.</p>
+        <div class="borrow-lists">
+            <section id="myBorrowSection">
+                <h3>My Borrow Requests</h3>
+                <p id="myBorrowEmpty" class="borrow-empty" hidden>You have not submitted any requests.</p>
+                <div id="myBorrowRequests" class="borrow-list"></div>
+            </section>
+            <section id="ownerBorrowSection">
+                <h3>Requests Received</h3>
+                <p id="ownerBorrowEmpty" class="borrow-empty" hidden>No requests are visible for your resources.</p>
+                <div id="ownerBorrowRequests" class="borrow-list"></div>
+            </section>
+        </div>
+        <section id="marketplaceTransferSection" class="marketplace-transfer-section" hidden>
+            <h3>Sale and donation transfers</h3>
+            <div class="borrow-lists">
+                <section>
+                    <h4>Requests I sent</h4>
+                    <p id="myTransferEmpty" class="borrow-empty" hidden>No sale or donation requests yet.</p>
+                    <div id="myTransferRequests" class="borrow-list"></div>
+                </section>
+                <section>
+                    <h4>Requests for my listings</h4>
+                    <p id="ownerTransferEmpty" class="borrow-empty" hidden>No transfer requests received.</p>
+                    <div id="ownerTransferRequests" class="borrow-list"></div>
+                </section>
+            </div>
+            <h3>My listing reports</h3>
+            <p id="myReportsEmpty" class="borrow-empty" hidden>No listing reports submitted.</p>
+            <div id="myListingReports" class="borrow-list"></div>
+        </section>
+    </section>
+
+
+        <section class="about page-view" id="about" data-route-view="about" hidden>
             <h2>Knowledge grows when we share.</h2>
             <p>
                 CampusShare helps students discover and share
                 educational resources within their campus community.
             </p>
+            <div class="about-marketplace-grid">
+                <article><h3>Borrow</h3><p>Request an item for temporary use. Availability and request actions depend on verified backend permissions.</p></article>
+                <article><h3>Sell</h3><p>Browse fixed-price listings. Students arrange payment directly; CampusShare does not collect or verify payments.</p></article>
+                <article><h3>Donate</h3><p>Find items offered for free permanent transfer to fellow students.</p></article>
+            </div>
         </section>
     </main>
+
+    <dialog id="authDialog" class="auth-dialog" aria-labelledby="authTitle">
+        <div class="auth-dialog-header">
+            <div>
+                <p class="tagline">WELCOME TO CAMPUSSHARE</p>
+                <h2 id="authTitle">Log in to your account</h2>
+            </div>
+            <button type="button" id="closeAuthDialog" class="dialog-close" aria-label="Close">×</button>
+        </div>
+        <div class="auth-tabs" role="tablist" aria-label="Account access">
+            <button type="button" id="showLogin" role="tab" aria-selected="true">Log in</button>
+            <button type="button" id="showRegister" role="tab" aria-selected="false">Create account</button>
+        </div>
+        <form id="loginForm" class="auth-form">
+            <label for="loginEmail">Email</label>
+            <input id="loginEmail" name="email" type="email" autocomplete="email" required>
+            <label for="loginPassword">Password</label>
+            <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+            <button type="submit" class="auth-submit">Log in</button>
+        </form>
+        <form id="registerForm" class="auth-form" hidden>
+            <label for="registerFullName">Full name</label>
+            <input id="registerFullName" name="full_name" type="text" autocomplete="name" required>
+            <label for="registerEmail">Email</label>
+            <input id="registerEmail" name="email" type="email" autocomplete="email" required>
+            <label for="registerPassword">Password</label>
+            <input id="registerPassword" name="password" type="password" autocomplete="new-password" required>
+            <button type="submit" class="auth-submit">Create account</button>
+        </form>
+        <p id="authMessage" class="auth-message" role="status" aria-live="polite"></p>
+    </dialog>
+
+    <dialog id="resourceDetailsDialog" class="auth-dialog" aria-labelledby="resourceDetailsTitle">
+        <div class="auth-dialog-header">
+            <div>
+                <p class="tagline">RESOURCE DETAILS</p>
+                <h2 id="resourceDetailsTitle"></h2>
+            </div>
+            <button type="button" id="closeResourceDetails" class="dialog-close" aria-label="Close">×</button>
+        </div>
+        <p id="resourceDetailsDescription" class="detail-description"></p>
+        <p id="resourcePaymentDisclaimer" class="payment-disclaimer" hidden>Any payment is arranged directly between students. CampusShare does not process or verify payment.</p>
+        <div id="resourceDetailsImages" class="resource-detail-images" aria-label="Resource photos"></div>
+        <div id="borrowDueDateWrap" class="borrow-due-date-wrap" hidden>
+            <label for="borrowDueDate">Requested return date (optional)</label>
+            <input id="borrowDueDate" type="date">
+        </div>
+        <dl id="resourceDetailsList" class="resource-details-list"></dl>
+        <section id="handoverDetailsPanel" class="handover-details-panel" hidden>
+            <h3>Campus handover</h3>
+            <p id="handoverDetailsText"></p>
+        </section>
+        <div id="resourceDetailsActions" class="resource-actions detail-actions"></div>
+        <p id="resourceDetailsFeatureNote" class="workflow-note" hidden></p>
+    </dialog>
+
+    <dialog id="listingReportDialog" class="auth-dialog" aria-labelledby="listingReportTitle">
+        <form id="listingReportForm" class="auth-form">
+            <h2 id="listingReportTitle">Report this listing</h2>
+            <label for="listingReportReason">Reason</label>
+            <select id="listingReportReason" required>
+                <option value="misleading_original_price">Misleading original price</option>
+                <option value="unreasonable_selling_price">Unreasonable selling price</option>
+                <option value="incorrect_description">Incorrect description</option>
+                <option value="suspicious_listing">Suspicious listing</option>
+                <option value="other">Other</option>
+            </select>
+            <label for="listingReportDetails">Details (optional)</label>
+            <textarea id="listingReportDetails" maxlength="2000"></textarea>
+            <p>Reports are reviewed by a person. A report alone does not suspend an account.</p>
+            <p id="listingReportStatus" role="status" aria-live="polite"></p>
+            <div class="form-actions">
+                <button type="submit">Submit report</button>
+                <button type="button" id="cancelListingReport" class="secondary-btn">Cancel</button>
+            </div>
+        </form>
+    </dialog>
 
     <footer>
         <p>© 2026 CampusShare. Built for students, by students.</p>
     </footer>
+    </div>
+    </div>
 
+    <script src="config.local.js"></script>
+    <script src="config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" crossorigin="anonymous"></script>
     <script src="api.js"></script>
+    <script src="auth.js"></script>
+    <script src="ui-model.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
