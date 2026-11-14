@@ -1195,6 +1195,11 @@
                 : "Submitted by another student. Owner actions appear when the secure staging workflow is enabled.";
             card.appendChild(note);
         }
+        if (resource && (request.status === "approved" || request.status === "return_requested")) {
+            card.appendChild(makeActionButton("View Contact & Handover", "secondary-btn", function () {
+                openResourceDetails(resource);
+            }));
+        }
         return card;
     }
 
@@ -1410,6 +1415,8 @@
         } catch (error) { setBorrowStatus(errorMessage(error), "error"); }
         finally { if (button.isConnected) setButtonBusy(button, false); }
     }
+
+
 
     function clearLibrary() {
         categories = [];

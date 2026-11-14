@@ -407,7 +407,15 @@ test("health API returns backend RPC feature flags without authentication", asyn
             ok: true,
             json: async () => ({
                 status: "ok",
-                features: { borrow_request_rpc_enabled: false, atomic_resource_update_rpc_enabled: false }
+                api_version: "1.0.0",
+                build_id: "mock-build",
+                features: {
+                    borrow_request_rpc_enabled: false,
+                    borrow_status_rpc_enabled: false,
+                    atomic_resource_update_rpc_enabled: false,
+                    marketplace_enabled: false,
+                    resource_images_enabled: false
+                }
             })
         };
     };
