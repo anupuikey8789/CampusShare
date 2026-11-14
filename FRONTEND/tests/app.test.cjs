@@ -1252,3 +1252,29 @@ test("empty results and request failures render messages instead of stale empty 
     assert.equal(failed.get("myBorrowEmpty").hidden, true);
     assert.match(failed.get("borrowStatus").textContent, /Request list unavailable/);
 });
+
+test("My Resources tabs switch cleanly between My Borrow, My Sell, and My Donate", async () => {
+    const harness = createHarness({ marketplaceEnabled: true });
+    harness.state.resources.push(
+        { id: 3, title: "Sell Keyboard", description: "Mechanical", category_id: 10, owner_id: "student-a", resource_type: "equipment", availability_status: "available", listing_mode: "sell", sale_price: 500, created_at: "2026-11-12T00:00:00Z" },
+        { id: 4, title: "Donate Desk", description: "Study table", category_id: 10, owner_id: "student-a", resource_type: "furniture", availability_status: "available", listing_mode: "donate", created_at: "2026-11-12T00:00:00Z" }
+    );
+    await settle();
+    harness.get("myResourcesNav").dispatch("click");
+    await settle();
+
+    // Default / My Borrow tab
+    harness.get("myBorrowTab").dispatch("click");
+    assert.equal(harness.get("resourceGrid").children.length, 1);
+    assert.match(collectText(harness.get("resourceGrid")), /Algorithms/);
+
+    // Switch to My Sell tab
+    harness.get("mySellTab").dispatch("click");
+    assert.equal(harness.get("resourceGrid").children.length, 1);
+    assert.match(collectText(harness.get("resourceGrid")), /Sell Keyboard/);
+
+    // Switch to My Donate tab
+    harness.get("myDonateTab").dispatch("click");
+    assert.equal(harness.get("resourceGrid").children.length, 1);
+    assert.match(collectText(harness.get("resourceGrid")), /Donate Desk/);
+});

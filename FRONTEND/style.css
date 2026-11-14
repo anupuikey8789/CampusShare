@@ -1835,3 +1835,53 @@ footer {
         grid-template-columns: 1fr;
     }
 }
+
+/* My Resources Sub-Tabs */
+.my-resources-header {
+    margin-bottom: 1.25rem;
+}
+.my-resources-tabs {
+    display: inline-flex;
+    gap: 0.5rem;
+    background: #f1f5f9;
+    padding: 0.35rem;
+    border-radius: 9999px;
+    border: 1px solid #e2e8f0;
+    margin-top: 1rem;
+}
+.my-resources-tab-btn {
+    border: none;
+    background: transparent;
+    padding: 0.55rem 1.35rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #475569;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.my-resources-tab-btn:hover {
+    color: #0f172a;
+}
+.my-resources-tab-btn.is-active,
+.my-resources-tab-btn[aria-selected="true"] {
+    background: #4f46e5;
+    color: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.resource-status-badge {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+.status-active { background: #dcfce7; color: #15803d; }
+.status-reserved { background: #fef3c7; color: #b45309; }
+.status-sold { background: #e0e7ff; color: #4338ca; }
+.status-donated { background: #fae8ff; color: #86198f; }
+.status-withdrawn { background: #f1f5f9; color: #64748b; }
+.status-returned { background: #dcfce7; color: #166534; }
+.status-rejected { background: #fee2e2; color: #991b1b; }

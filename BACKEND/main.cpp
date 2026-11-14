@@ -12,9 +12,11 @@
 #include <fstream>
 #include <future>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -532,6 +534,12 @@ bool isValidUuid(const std::string& value)
     return true;
 }
 
+struct CachedAuthToken
+{
+    AuthResult auth;
+    std::chrono::steady_clock::time_point expiresAt;
+};
+
 class SupabaseClient
 {
 public:
@@ -605,6 +613,20 @@ public:
             return auth;
         }
 
+        {
+            std::lock_guard<std::mutex> lock(authCacheMutex_);
+            const auto now = std::chrono::steady_clock::now();
+            auto it = authCache_.find(token);
+            if (it != authCache_.end())
+            {
+                if (now < it->second.expiresAt)
+                {
+                    return it->second.auth;
+                }
+                authCache_.erase(it);
+            }
+        }
+
         const HttpResult result = request("GET", "/auth/v1/user", token);
         if (result.curlCode != CURLE_OK || result.status == 0 ||
             result.status == 429 || result.status >= 500)
@@ -641,6 +663,12 @@ public:
 
         auth.userId = parsed["id"].s();
         auth.verified = !auth.userId.empty();
+        if (auth.verified)
+        {
+            std::lock_guard<std::mutex> lock(authCacheMutex_);
+            // Cache verified token for 45 seconds to avoid hammering Supabase Auth
+            authCache_[token] = CachedAuthToken{ auth, std::chrono::steady_clock::now() + std::chrono::seconds(45) };
+        }
         return auth;
     }
 
@@ -684,6 +712,8 @@ public:
 
 private:
     const Config& config_;
+    mutable std::mutex authCacheMutex_;
+    mutable std::unordered_map<std::string, CachedAuthToken> authCache_;
 };
 
 crow::response jsonError(int status, const std::string& code,
@@ -1229,10 +1259,69 @@ int main()
                 return authenticationError(auth);
             if (auto ownerError = verifyResourceOwner(request, id, auth.userId))
                 return std::move(*ownerError);
+
+            // 1. Check for active or pending borrow requests
+            const HttpResult borrowCheck = supabase.postgrest(
+                "GET", "borrow_requests?select=id,status&resource_id=eq." + urlEncode(id) +
+                       "&status=in.(pending,approved,return_requested)&limit=1",
+                tokenFromRequest(request));
+            if (borrowCheck.curlCode == CURLE_OK && borrowCheck.status >= 200 && borrowCheck.status < 300)
+            {
+                const auto bRows = crow::json::load(borrowCheck.body);
+                if (bRows && bRows.t() == crow::json::type::List && bRows.size() > 0)
+                {
+                    return jsonError(409, "active_requests_exist",
+                                     "Cannot delete listing with active or pending borrow requests. Please complete or reject them first.");
+                }
+            }
+
+            // 2. Check for active or pending transfer requests (buy / donate)
+            if (config.useMarketplaceFeatures)
+            {
+                const HttpResult transferCheck = supabase.postgrest(
+                    "GET", "resource_transfer_requests?select=id,status&resource_id=eq." + urlEncode(id) +
+                           "&status=in.(pending,approved)&limit=1",
+                    tokenFromRequest(request));
+                if (transferCheck.curlCode == CURLE_OK && transferCheck.status >= 200 && transferCheck.status < 300)
+                {
+                    const auto tRows = crow::json::load(transferCheck.body);
+                    if (tRows && tRows.t() == crow::json::type::List && tRows.size() > 0)
+                    {
+                        return jsonError(409, "active_requests_exist",
+                                         "Cannot delete listing with active or pending transfer requests. Please complete or reject them first.");
+                    }
+                }
+            }
+
+            // 3. Remove dependent auxiliary records that have RESTRICT foreign keys
+            supabase.postgrest("DELETE", "resource_handover_details?resource_id=eq." + urlEncode(id),
+                               tokenFromRequest(request), {}, "return=minimal");
+            supabase.postgrest("DELETE", "resource_images?resource_id=eq." + urlEncode(id),
+                               tokenFromRequest(request), {}, "return=minimal");
+
+            // 4. Delete the resource row from resources
             const HttpResult upstream = supabase.postgrest(
                 "DELETE", "resources?id=eq." + urlEncode(id), tokenFromRequest(request), {}, "return=minimal");
             if (upstream.curlCode != CURLE_OK || upstream.status < 200 || upstream.status >= 300)
+            {
+                // If hard delete is rejected by PostgreSQL foreign key constraint (e.g. past completed/returned loans),
+                // fall back to safe withdrawal / soft delete as mandated by lifecycle rules
+                if (upstream.status == 409 || upstream.status == 400)
+                {
+                    crow::json::wvalue withdrawPayload;
+                    withdrawPayload["availability_status"] = "unavailable";
+                    const HttpResult patchResult = supabase.postgrest(
+                        "PATCH", "resources?id=eq." + urlEncode(id),
+                        tokenFromRequest(request), withdrawPayload.dump(), "return=minimal");
+                    if (patchResult.curlCode == CURLE_OK && patchResult.status >= 200 && patchResult.status < 300)
+                    {
+                        crow::response resp(200, "{\"message\":\"Resource withdrawn and archived.\"}");
+                        resp.set_header("Content-Type", "application/json; charset=utf-8");
+                        return resp;
+                    }
+                }
                 return upstreamError(upstream, "Could not delete resource.");
+            }
             return crow::response(204);
         });
 

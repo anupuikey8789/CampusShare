@@ -75,6 +75,10 @@
     const resourcesSection = document.getElementById("resources");
     const browseResourcesMount = document.getElementById("browseResourcesMount");
     const myResourcesMount = document.getElementById("myResourcesMount");
+    const myBorrowTab = document.getElementById("myBorrowTab");
+    const mySellTab = document.getElementById("mySellTab");
+    const myDonateTab = document.getElementById("myDonateTab");
+    let myResourcesActiveSubTab = "borrow";
     const sellResourcesMount = document.getElementById("sellResourcesMount");
     const donateResourcesMount = document.getElementById("donateResourcesMount");
     const sellMarketplaceNote = document.getElementById("sellMarketplaceNote");
@@ -279,6 +283,24 @@
         updateMarketplaceFilterVisibility();
         showAddForm.hidden = !canAddFromCurrentRoute();
         emptyAddResource.hidden = !myResourcesOnly || !canAddFromCurrentRoute();
+        resourceViewTitle.textContent = resourceViewHeading();
+        if (resourcesLoaded) renderResources();
+    }
+
+    function setMyResourcesSubTab(subTab) {
+        myResourcesActiveSubTab = subTab;
+        if (myBorrowTab) {
+            myBorrowTab.classList.toggle("is-active", subTab === "borrow");
+            myBorrowTab.setAttribute("aria-selected", subTab === "borrow" ? "true" : "false");
+        }
+        if (mySellTab) {
+            mySellTab.classList.toggle("is-active", subTab === "sell");
+            mySellTab.setAttribute("aria-selected", subTab === "sell" ? "true" : "false");
+        }
+        if (myDonateTab) {
+            myDonateTab.classList.toggle("is-active", subTab === "donate");
+            myDonateTab.setAttribute("aria-selected", subTab === "donate" ? "true" : "false");
+        }
         resourceViewTitle.textContent = resourceViewHeading();
         if (resourcesLoaded) renderResources();
     }
@@ -603,12 +625,20 @@
     }
 
     function filteredResources() {
+        let mode = listingModeFilter.value;
+        if (currentRoute === "sell") {
+            mode = "sell";
+        } else if (currentRoute === "donate") {
+            mode = "donate";
+        } else if (myResourcesOnly) {
+            mode = myResourcesActiveSubTab;
+        }
+
         return ui.filterResources(resources, {
             query: searchInput.value,
             categoryId: categoryFilter.value,
             resourceType: resourceTypeFilter.value,
-            listingMode: currentRoute === "sell" ? "sell"
-                : currentRoute === "donate" ? "donate" : listingModeFilter.value,
+            listingMode: mode,
             availability: availabilityFilter.value,
             minPrice: priceMinFilter.value,
             maxPrice: priceMaxFilter.value,
@@ -1259,7 +1289,7 @@
             const note = document.createElement("small");
             note.className = "pending-note";
             note.textContent = borrowStatusRpcEnabled
-                ? "This request has no owner action in its current status."
+                ? (request.status === "returned" ? "✓ Returned & loan completed" : request.status === "rejected" ? "✕ Request rejected" : "This request has no owner action in its current status.")
                 : "Submitted by another student. Owner actions appear when the secure staging workflow is enabled.";
             card.appendChild(note);
         }
@@ -2211,6 +2241,9 @@
     resourceDetailsDialog.addEventListener("click", function (event) {
         if (event.target === resourceDetailsDialog) resourceDetailsDialog.close();
     });
+    if (myBorrowTab) myBorrowTab.addEventListener("click", function () { setMyResourcesSubTab("borrow"); });
+    if (mySellTab) mySellTab.addEventListener("click", function () { setMyResourcesSubTab("sell"); });
+    if (myDonateTab) myDonateTab.addEventListener("click", function () { setMyResourcesSubTab("donate"); });
     searchInput.addEventListener("input", renderResources);
     categoryFilter.addEventListener("change", renderResources);
     resourceTypeFilter.addEventListener("change", renderResources);
