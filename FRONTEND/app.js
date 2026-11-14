@@ -41,7 +41,16 @@
     const drawerSortList = document.getElementById("drawerSortList");
     const drawerAvailabilityList = document.getElementById("drawerAvailabilityList");
     const sliderMaxLabel = document.getElementById("sliderMaxLabel");
+    const drawerListingModeSection = document.getElementById("drawerListingModeSection");
+    const drawerListingModeTitle = document.getElementById("drawerListingModeTitle");
+    const drawerListingModeList = document.getElementById("drawerListingModeList");
+    const drawerModeAll = document.getElementById("drawerModeAll");
+    const drawerModeBorrow = document.getElementById("drawerModeBorrow");
+    const drawerModeSell = document.getElementById("drawerModeSell");
+    const drawerModeDonate = document.getElementById("drawerModeDonate");
+    const resourcesTagline = document.getElementById("resourcesTagline");
 
+    let stagingListingMode = "all";
     let stagingCategory = "all";
     let stagingCondition = "all";
     let stagingMinPrice = "";
@@ -106,7 +115,7 @@
     const myBorrowTab = document.getElementById("myBorrowTab");
     const mySellTab = document.getElementById("mySellTab");
     const myDonateTab = document.getElementById("myDonateTab");
-    let myResourcesActiveSubTab = "borrow";
+    let myResourcesActiveSubTab = "all";
     const sellResourcesMount = document.getElementById("sellResourcesMount");
     const donateResourcesMount = document.getElementById("donateResourcesMount");
     const sellMarketplaceNote = document.getElementById("sellMarketplaceNote");
@@ -299,6 +308,12 @@
         if (typeof window.scrollTo === "function") window.scrollTo(0, 0);
 
         const showingMyResources = route === "my-resources";
+        if (resourcesTagline) {
+            resourcesTagline.textContent = showingMyResources ? "YOUR CAMPUS LISTINGS"
+                : route === "sell" ? "CAMPUS MARKETPLACE"
+                    : route === "donate" ? "SHARE WITH YOUR CAMPUS"
+                        : "YOUR LEARNING LIBRARY";
+        }
         resourcesPageHeading.textContent = showingMyResources ? "My Resources"
             : route === "sell" ? "Fixed-price listings"
                 : route === "donate" ? "Free donations" : "Explore Resources";
@@ -317,7 +332,8 @@
     }
 
     function setMyResourcesSubTab(subTab) {
-        myResourcesActiveSubTab = subTab;
+        myResourcesActiveSubTab = subTab || "all";
+        stagingListingMode = myResourcesActiveSubTab;
         if (myBorrowTab) {
             myBorrowTab.classList.toggle("is-active", subTab === "borrow");
             myBorrowTab.setAttribute("aria-selected", subTab === "borrow" ? "true" : "false");
@@ -330,12 +346,18 @@
             myDonateTab.classList.toggle("is-active", subTab === "donate");
             myDonateTab.setAttribute("aria-selected", subTab === "donate" ? "true" : "false");
         }
+        syncDrawerListingModePills();
         resourceViewTitle.textContent = resourceViewHeading();
         if (resourcesLoaded) renderResources();
     }
 
     function resourceViewHeading() {
-        if (currentRoute === "my-resources") return "My resources";
+        if (currentRoute === "my-resources") {
+            if (myResourcesActiveSubTab === "borrow") return "My borrow listings";
+            if (myResourcesActiveSubTab === "sell") return "My sell listings";
+            if (myResourcesActiveSubTab === "donate") return "My donation listings";
+            return "My resources";
+        }
         if (currentRoute === "sell") return "Sell listings";
         if (currentRoute === "donate") return "Donation listings";
         return "Browse resources";
@@ -510,11 +532,38 @@
         return Math.ceil(maxFound / 1000) * 1000;
     }
 
+    function syncDrawerListingModePills() {
+        if (!drawerListingModeSection) return;
+        const hideMode = currentRoute === "sell" || currentRoute === "donate" || currentRoute === "borrowing";
+        drawerListingModeSection.hidden = hideMode;
+        if (hideMode) return;
+
+        if (myResourcesOnly) {
+            if (drawerListingModeTitle) drawerListingModeTitle.textContent = "My Listings";
+            if (drawerModeAll) drawerModeAll.textContent = "All My Resources";
+            if (drawerModeBorrow) drawerModeBorrow.textContent = "My Borrow";
+            if (drawerModeSell) drawerModeSell.textContent = "My Sell";
+            if (drawerModeDonate) drawerModeDonate.textContent = "My Donate";
+        } else {
+            if (drawerListingModeTitle) drawerListingModeTitle.textContent = "Listing Type";
+            if (drawerModeAll) drawerModeAll.textContent = "All Listings";
+            if (drawerModeBorrow) drawerModeBorrow.textContent = "Borrow / Lend";
+            if (drawerModeSell) drawerModeSell.textContent = "For Sale";
+            if (drawerModeDonate) drawerModeDonate.textContent = "Donation";
+        }
+
+        if (drawerListingModeList) {
+            Array.from(drawerListingModeList.children).forEach(function (btn) {
+                btn.classList.toggle("is-active", btn.dataset.mode === stagingListingMode);
+            });
+        }
+    }
+
     function syncDrawerPriceVisibility() {
         if (!drawerPriceSection) return;
         const mode = currentRoute === "sell" ? "sell"
             : currentRoute === "donate" ? "donate"
-            : myResourcesOnly ? myResourcesActiveSubTab : "browse";
+            : stagingListingMode;
         if (mode === "donate" || mode === "borrow") {
             drawerPriceSection.hidden = true;
         } else {
@@ -559,6 +608,7 @@
     }
 
     function syncDrawerWithState() {
+        syncDrawerListingModePills();
         syncDrawerCategoryPills();
         syncDrawerConditionPills();
         syncDrawerSortPills();
@@ -571,6 +621,11 @@
     }
 
     function openFilterDrawer() {
+        if (myResourcesOnly) {
+            stagingListingMode = myResourcesActiveSubTab || "all";
+        } else {
+            stagingListingMode = listingModeFilter ? listingModeFilter.value || "all" : "all";
+        }
         stagingCategory = categoryFilter ? categoryFilter.value || "all" : "all";
         stagingCondition = conditionFilter ? conditionFilter.value || "all" : "all";
         stagingMinPrice = priceMinFilter ? priceMinFilter.value || "" : "";
@@ -624,11 +679,18 @@
         if (availabilityFilter) availabilityFilter.value = stagingAvailability;
         if (sortSelect) sortSelect.value = stagingSort;
 
+        if (myResourcesOnly) {
+            setMyResourcesSubTab(stagingListingMode);
+        } else {
+            if (listingModeFilter) listingModeFilter.value = stagingListingMode;
+        }
+
         closeFilterDrawer();
         renderResources();
     }
 
     function resetDrawerFilters() {
+        stagingListingMode = "all";
         stagingCategory = "all";
         stagingCondition = "all";
         stagingMinPrice = "";
@@ -658,6 +720,11 @@
         if ((priceMinFilter && priceMinFilter.value !== "") || (priceMaxFilter && priceMaxFilter.value !== "")) activeCount++;
         if (availabilityFilter && availabilityFilter.value && availabilityFilter.value !== "all") activeCount++;
         if (sortSelect && sortSelect.value && sortSelect.value !== "newest") activeCount++;
+        if (myResourcesOnly && myResourcesActiveSubTab && myResourcesActiveSubTab !== "all") {
+            activeCount++;
+        } else if (!myResourcesOnly && listingModeFilter && listingModeFilter.value && listingModeFilter.value !== "all") {
+            activeCount++;
+        }
 
         if (filterBadge) {
             filterBadge.textContent = String(activeCount);
@@ -735,6 +802,25 @@
                 makeChip(`Availability: ${availabilityFilter.value === "available" ? "Available Only" : availabilityFilter.value}`, function () {
                     availabilityFilter.value = "all";
                     stagingAvailability = "all";
+                    renderResources();
+                });
+            }
+
+            if (myResourcesOnly && myResourcesActiveSubTab && myResourcesActiveSubTab !== "all") {
+                const subLabel = myResourcesActiveSubTab === "borrow" ? "My Borrow"
+                    : myResourcesActiveSubTab === "sell" ? "My Sell" : "My Donate";
+                makeChip(`Type: ${subLabel}`, function () {
+                    setMyResourcesSubTab("all");
+                    stagingListingMode = "all";
+                    syncDrawerListingModePills();
+                });
+            } else if (!myResourcesOnly && listingModeFilter && listingModeFilter.value && listingModeFilter.value !== "all") {
+                const modeLabel = listingModeFilter.value === "borrow" ? "Borrow / Lend"
+                    : listingModeFilter.value === "sell" ? "For Sale" : "Donation";
+                makeChip(`Type: ${modeLabel}`, function () {
+                    if (listingModeFilter) listingModeFilter.value = "all";
+                    stagingListingMode = "all";
+                    syncDrawerListingModePills();
                     renderResources();
                 });
             }
@@ -2408,6 +2494,7 @@
         priceMaxFilter.value = "";
         conditionFilter.value = "all";
         sortSelect.value = "newest";
+        setMyResourcesSubTab("all");
         navigateTo("my-resources");
     }
 
@@ -2427,6 +2514,9 @@
         conditionFilter.value = "all";
         sortSelect.value = "newest";
         myResourcesOnly = currentRoute === "my-resources";
+        if (myResourcesOnly) {
+            setMyResourcesSubTab("all");
+        }
         resetDrawerFilters();
         renderResources();
     }
@@ -2670,6 +2760,16 @@
     if (filterDrawerBackdrop) filterDrawerBackdrop.addEventListener("click", closeFilterDrawer);
     if (drawerApplyBtn) drawerApplyBtn.addEventListener("click", applyDrawerFilters);
     if (drawerResetBtn) drawerResetBtn.addEventListener("click", resetDrawerFilters);
+
+    if (drawerListingModeList) {
+        drawerListingModeList.addEventListener("click", function (event) {
+            const btn = event.target.closest("button.filter-pill");
+            if (!btn) return;
+            stagingListingMode = btn.dataset.mode || "all";
+            syncDrawerListingModePills();
+            syncDrawerPriceVisibility();
+        });
+    }
 
     if (drawerConditionList) {
         drawerConditionList.addEventListener("click", function (event) {

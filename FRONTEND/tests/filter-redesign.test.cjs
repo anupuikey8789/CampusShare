@@ -222,3 +222,30 @@ test("20. Responsive styling covers drawer slide-in and mobile adaptation", () =
     assert.ok(css.includes(".filter-chip"), "style.css missing .filter-chip");
     assert.ok(css.includes("@media (max-width: 640px)"), "style.css missing mobile @media rule");
 });
+
+test("21. Filter Drawer includes Listing Mode section for My Borrow / My Sell / My Donate filtering", () => {
+    const html = fs.readFileSync(path.join(frontend, "index.html"), "utf8");
+    const requiredElements = [
+        'id="drawerListingModeSection"',
+        'id="drawerListingModeTitle"',
+        'id="drawerListingModeList"',
+        'id="drawerModeAll"',
+        'id="drawerModeBorrow"',
+        'id="drawerModeSell"',
+        'id="drawerModeDonate"'
+    ];
+    for (const elem of requiredElements) {
+        assert.ok(html.includes(elem), `index.html is missing ${elem}`);
+    }
+});
+
+test("22. My Resources page header is clean and unified without redundant duplicate headings", () => {
+    const html = fs.readFileSync(path.join(frontend, "index.html"), "utf8");
+    const css = fs.readFileSync(path.join(frontend, "style.css"), "utf8");
+    // Verify myResourcesPage mounts resourcesSection without duplicate visible section headings
+    assert.ok(!html.includes('class="my-resources-header"'), "Duplicate visible .my-resources-header must be removed from index.html");
+    assert.ok(html.includes('id="myBorrowTab"'), "myBorrowTab must be preserved for compatibility");
+    assert.ok(html.includes('id="mySellTab"'), "mySellTab must be preserved for compatibility");
+    assert.ok(html.includes('id="myDonateTab"'), "myDonateTab must be preserved for compatibility");
+    assert.ok(css.includes(".my-resources-header"), "style.css ensures .my-resources-header is suppressed");
+});

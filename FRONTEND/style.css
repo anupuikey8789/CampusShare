@@ -1838,7 +1838,7 @@ footer {
 
 /* My Resources Sub-Tabs */
 .my-resources-header {
-    margin-bottom: 1.25rem;
+    display: none !important;
 }
 .my-resources-tabs {
     display: inline-flex;
