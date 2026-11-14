@@ -1208,7 +1208,7 @@
             if (action === "approve") {
                 const dueInput = button.closest(".borrow-request-card")?.querySelector(".borrow-due-date");
                 const dueAt = dueInput && dueInput.value
-                    ? new Date(`${dueInput.value}T23:59:59.000Z`).toISOString()
+                    ? `${dueInput.value}T23:59:59Z`
                     : null;
                 if (dueAt && request.requested_at && dueAt < request.requested_at)
                     throw new Error("The due date cannot be earlier than the request date.");
@@ -1843,7 +1843,7 @@
         try {
             const dueInput = document.getElementById("borrowDueDate");
             const dueAt = marketplaceEnabled && dueInput && dueInput.value
-                ? new Date(`${dueInput.value}T23:59:59.000Z`).toISOString()
+                ? `${dueInput.value}T23:59:59Z`
                 : null;
             await api.createBorrowRequest({ resource_id: resourceId, due_at: dueAt });
             const refreshed = await loadLibrary();

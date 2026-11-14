@@ -444,15 +444,35 @@ bool isSafeBearerToken(const std::string& token)
 
 bool isUtcTimestamp(const std::string& value)
 {
-    if (value.size() != 20 || value[4] != '-' || value[7] != '-' ||
-        value[10] != 'T' || value[13] != ':' || value[16] != ':' || value[19] != 'Z')
-        return false;
-    for (std::size_t i = 0; i < value.size(); ++i)
+    if (value.size() == 20)
     {
-        if (i == 4 || i == 7 || i == 10 || i == 13 || i == 16 || i == 19)
-            continue;
-        if (!std::isdigit(static_cast<unsigned char>(value[i])))
+        if (value[4] != '-' || value[7] != '-' ||
+            value[10] != 'T' || value[13] != ':' || value[16] != ':' || value[19] != 'Z')
             return false;
+        for (std::size_t i = 0; i < value.size(); ++i)
+        {
+            if (i == 4 || i == 7 || i == 10 || i == 13 || i == 16 || i == 19)
+                continue;
+            if (!std::isdigit(static_cast<unsigned char>(value[i])))
+                return false;
+        }
+    }
+    else if (value.size() == 24)
+    {
+        if (value[4] != '-' || value[7] != '-' ||
+            value[10] != 'T' || value[13] != ':' || value[16] != ':' || value[19] != '.' || value[23] != 'Z')
+            return false;
+        for (std::size_t i = 0; i < value.size(); ++i)
+        {
+            if (i == 4 || i == 7 || i == 10 || i == 13 || i == 16 || i == 19 || i == 23)
+                continue;
+            if (!std::isdigit(static_cast<unsigned char>(value[i])))
+                return false;
+        }
+    }
+    else
+    {
+        return false;
     }
     const int year = std::stoi(value.substr(0, 4));
     const int month = std::stoi(value.substr(5, 2));
@@ -1809,6 +1829,8 @@ int main()
                     !isUtcTimestamp(static_cast<std::string>(parsed["due_at"].s())))
                     return jsonError(400, "invalid_date", "due_at must be null or a valid UTC timestamp.");
                 dueAt = static_cast<std::string>(parsed["due_at"].s());
+                if (dueAt.size() == 24)
+                    dueAt = dueAt.substr(0, 19) + "Z";
             }
 
             const std::string currentTime = currentUtcTimestamp();
@@ -1889,7 +1911,10 @@ int main()
                 if (parsed["due_at"].t() != crow::json::type::String ||
                     !isUtcTimestamp(static_cast<std::string>(parsed["due_at"].s())))
                     return jsonError(400, "invalid_date", "due_at must be null or a valid UTC timestamp.");
-                parameters["p_due_at"] = static_cast<std::string>(parsed["due_at"].s());
+                std::string approvedDue = static_cast<std::string>(parsed["due_at"].s());
+                if (approvedDue.size() == 24)
+                    approvedDue = approvedDue.substr(0, 19) + "Z";
+                parameters["p_due_at"] = std::move(approvedDue);
             }
             else
                 parameters["p_due_at"] = nullptr;
