@@ -778,21 +778,49 @@ footer {
     background: #16794b;
 }
 
+#aboutNav {
+    display: none !important;
+}
+
 .pending-note {
     color: #64748b;
     font-size: 12px;
 }
 
 .borrow-requests {
-    max-width: 1150px;
-    margin: 70px auto 0;
-    padding-top: 55px;
-    border-top: 1px solid #e5eaf1;
+    min-height: calc(100vh - 68px);
+    width: min(100%, 1400px);
+    margin: 0 auto;
+    padding: 36px clamp(16px, 3.5vw, 44px) 64px;
     text-align: left;
+    border-top: none;
 }
 
 .borrow-requests .section-heading {
     text-align: center;
+    max-width: 680px;
+    margin: 0 auto 36px;
+}
+
+.borrow-requests .section-heading .tagline {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #4f46e5;
+    margin-bottom: 6px;
+}
+
+.borrow-requests .section-heading h2 {
+    font-size: clamp(1.8rem, 2.5vw, 2.4rem);
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 8px;
+}
+
+.borrow-requests .section-heading p {
+    color: #64748b;
+    font-size: 1rem;
+    line-height: 1.5;
 }
 
 .workflow-note {
@@ -807,62 +835,150 @@ footer {
 .borrow-lists {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 24px;
+    gap: 28px;
+    align-items: start;
 }
 
 .borrow-lists > section {
     min-width: 0;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.02);
+    transition: box-shadow 0.2s ease;
+}
+
+.borrow-lists > section:hover {
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
 }
 
 .borrow-lists h3 {
-    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #0f172a;
+    padding-bottom: 14px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid #f1f5f9;
 }
 
 .borrow-list {
     display: grid;
-    gap: 12px;
+    gap: 14px;
 }
 
 .borrow-request-card {
-    padding: 18px;
-    border: 1px solid #e5eaf1;
-    border-radius: 12px;
-    background: white;
+    padding: 20px;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: all 0.18s ease;
+}
+
+.borrow-request-card:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
 }
 
 .borrow-request-card h4 {
-    margin-bottom: 8px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0;
+    line-height: 1.35;
 }
 
 .borrow-request-card p {
-    margin-top: 5px;
+    margin: 0;
     color: #64748b;
-    font-size: 14px;
+    font-size: 0.88rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.borrow-request-card .resource-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.borrow-request-card .secondary-btn {
+    margin-top: 4px;
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+}
+
+.borrow-due-date {
+    padding: 7px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    color: #334155;
 }
 
 .request-status {
-    display: inline-block;
-    padding: 4px 9px;
-    border-radius: 20px;
-    background: #eff6ff;
-    color: #1d4ed8;
-    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 600;
     text-transform: capitalize;
+    letter-spacing: 0.02em;
 }
 
-.status-approved,
-.status-returned {
-    background: #ecfdf3;
-    color: #16794b;
+.status-pending {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
 }
 
-.status-rejected {
-    background: #fff1f2;
-    color: #b42318;
+.status-approved, .status-returned, .status-completed {
+    background: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.status-rejected, .status-cancelled {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
 }
 
 .borrow-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 36px 18px;
+    text-align: center;
     color: #64748b;
+    font-size: 0.92rem;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px;
+    margin: 4px 0;
+}
+
+.borrow-empty::before {
+    content: "📋";
+    font-size: 1.8rem;
+    margin-bottom: 8px;
+    opacity: 0.75;
 }
 
 .detail-description {
@@ -1346,6 +1462,14 @@ footer {
     .stat-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+
+    .borrow-lists {
+        grid-template-columns: 1fr;
+    }
+
+    .borrow-requests {
+        padding: 24px 16px 48px;
+    }
 }
 
 @media (max-width: 760px) {
@@ -1627,8 +1751,38 @@ footer {
     color: #0f172a;
 }
 .borrow-due-date-wrap { margin: 12px 0; }
-.marketplace-transfer-section { margin-top: 28px; padding-top: 20px; border-top: 1px solid #dbe4f2; }
-.borrow-due-date { min-width: 150px; }
+.marketplace-transfer-section {
+    margin-top: 36px;
+    padding: 28px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+.marketplace-transfer-section > h3 {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f1f5f9;
+}
+.marketplace-transfer-section .borrow-lists {
+    gap: 20px;
+}
+.marketplace-transfer-section .borrow-lists > section {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: none;
+}
+.marketplace-transfer-section h4 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 12px;
+}
 
 .hero-marketplace-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 .marketplace-page-intro { max-width: 1180px; margin: 0 auto 18px; padding: clamp(20px, 3vw, 34px); border: 1px solid #e0e7f4; border-radius: 18px; background: linear-gradient(120deg, #f4f5ff, #fff); }
