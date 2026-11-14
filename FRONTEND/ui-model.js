@@ -27,7 +27,7 @@
                 resourceType !== String(settings.resourceType).trim().toLocaleLowerCase()) return false;
             if (settings.listingMode && settings.listingMode !== "all" && listingMode !== settings.listingMode) return false;
             if (settings.ownerId && !isOwnResource(resource, settings.ownerId)) return false;
-            if (condition !== "all" && (listingMode !== "sell" || resource.item_condition !== condition)) return false;
+            if (condition !== "all" && resource.item_condition !== condition) return false;
             if (Number.isFinite(minPrice) || Number.isFinite(maxPrice)) {
                 const price = listingMode === "sell" ? Number(resource.sale_price)
                     : listingMode === "borrow" && resource.borrow_price_kind !== "free"
@@ -39,7 +39,13 @@
             return true;
         }).sort(function (left, right) {
             if (settings.sort === "title") {
-                return String(left.title || "").localeCompare(String(right.title || ""));
+                return String(left.title || "").localeCompare(String(right.title || ""), undefined, { sensitivity: "base" });
+            }
+            if (settings.sort === "title-desc") {
+                return String(right.title || "").localeCompare(String(left.title || ""), undefined, { sensitivity: "base" });
+            }
+            if (settings.sort === "oldest") {
+                return (Date.parse(left.created_at || "") || 0) - (Date.parse(right.created_at || "") || 0);
             }
             if (settings.sort === "price-low" || settings.sort === "price-high") {
                 function priceOf(resource) {
