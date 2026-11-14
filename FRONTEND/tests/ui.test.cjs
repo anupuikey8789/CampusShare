@@ -37,6 +37,19 @@ test("resource discovery can independently filter Borrow, Sell, and Donate listi
     assert.deepEqual(ui.filterResources(listings, { listingMode: "donate" }).map((row) => row.id), [3]);
 });
 
+test("sold, donated, and withdrawn items are excluded from marketplace resource discovery", () => {
+    const mixed = [
+        { id: 1, title: "Active Keyboard", listing_mode: "sell", listing_state: "active" },
+        { id: 2, title: "Sold Keyboard", listing_mode: "sell", listing_state: "sold" },
+        { id: 3, title: "Donated Textbook", listing_mode: "donate", listing_state: "donated" },
+        { id: 4, title: "Withdrawn Notes", listing_mode: "borrow", listing_state: "withdrawn" }
+    ];
+    const visible = ui.filterResources(mixed, { listingMode: "sell" });
+    assert.deepEqual(visible.map((r) => r.id), [1]);
+    const allVisible = ui.filterResources(mixed, {});
+    assert.deepEqual(allVisible.map((r) => r.id), [1]);
+});
+
 test("marketplace discovery filters INR price ranges and sale condition, and sorts by price", () => {
     const listings = [
         { ...resources[0], id: 11, listing_mode: "sell", sale_price: 45, item_condition: "good" },

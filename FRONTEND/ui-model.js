@@ -14,7 +14,7 @@
         const condition = String(settings.condition || "all");
         return (Array.isArray(resources) ? resources : []).filter(function (resource) {
             if (!resource || typeof resource !== "object") return false;
-            if (resource.listing_state === "withdrawn") return false;
+            if (resource.listing_state === "withdrawn" || resource.listing_state === "sold" || resource.listing_state === "donated") return false;
             const resourceType = String(resource.resource_type || "").trim().toLocaleLowerCase();
             const listingMode = String(resource.listing_mode || "borrow");
             const text = `${resource.title || ""} ${resource.description || ""} ${resource.resource_type || ""}`.toLocaleLowerCase();
