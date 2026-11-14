@@ -958,7 +958,7 @@ DECLARE
     v_borrower_id uuid;
     v_conv RECORD;
     v_req RECORD;
-    v_res RECORD;
+    v_res_title text;
     v_borrower_name text;
 BEGIN
     v_borrower_id := auth.uid();
@@ -999,7 +999,7 @@ BEGIN
         updated_at = clock_timestamp()
     WHERE id = v_conv.borrow_request_id;
 
-    SELECT title INTO v_res FROM public.resources WHERE id = v_conv.resource_id;
+    SELECT title INTO v_res_title FROM public.resources WHERE id = v_conv.resource_id;
     SELECT COALESCE(full_name, 'The borrower') INTO v_borrower_name FROM public.profiles WHERE id = v_borrower_id;
 
     INSERT INTO public.notifications (user_id, type, title, body, reference_id)
@@ -1007,7 +1007,7 @@ BEGIN
         v_conv.owner_id,
         'return_requested',
         'Return Requested',
-        v_borrower_name || ' wants to return "' || v_res.title || '". Please arrange handover or confirm return.',
+        v_borrower_name || ' wants to return "' || v_res_title || '". Please arrange handover or confirm return.',
         p_conversation_id::text
     );
 
@@ -1039,7 +1039,7 @@ DECLARE
     v_request public.borrow_requests%ROWTYPE;
     v_conv RECORD;
     v_owner_name text;
-    v_res RECORD;
+    v_res_title text;
 BEGIN
     IF v_actor IS NULL OR v_is_anonymous THEN
         RAISE EXCEPTION USING ERRCODE='28000', MESSAGE='Authentication required';
@@ -1054,7 +1054,7 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE='P0002', MESSAGE='Request not found';
     END IF;
 
-    SELECT r.owner_id, r.title INTO v_owner, v_res.title
+    SELECT r.owner_id, r.title INTO v_owner, v_res_title
     FROM public.resources AS r WHERE r.id = v_resource_id FOR UPDATE;
     IF NOT FOUND THEN
         RAISE EXCEPTION USING ERRCODE='P0002', MESSAGE='Resource not found';
@@ -1100,7 +1100,7 @@ BEGIN
         v_request.borrower_id,
         'resource_returned',
         'Resource Returned',
-        v_owner_name || ' confirmed the return of "' || v_res.title || '".',
+        v_owner_name || ' confirmed the return of "' || v_res_title || '".',
         p_request_id::text
     );
 

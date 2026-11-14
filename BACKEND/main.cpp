@@ -869,7 +869,8 @@ int main()
     SupabaseClient supabase(config);
     const auto verifyResourceOwner = [&](const crow::request& request,
                                          const std::string& resourceId,
-                                         const std::string& userId) -> std::optional<crow::response> {
+                                         const std::string& userId,
+                                         const std::string& customForbidden = {}) -> std::optional<crow::response> {
         const HttpResult upstream = supabase.postgrest(
             "GET", "resources?select=id,owner_id&id=eq." + urlEncode(resourceId) + "&limit=1",
             tokenFromRequest(request));
@@ -883,7 +884,7 @@ int main()
         if (!rows[0].has("owner_id") || rows[0]["owner_id"].t() != crow::json::type::String)
             return jsonError(502, "invalid_upstream_response", "Supabase returned incomplete resource data.");
         if (rows[0]["owner_id"].s() != userId)
-            return jsonError(403, "forbidden", "You may change only resources you own.");
+            return jsonError(403, "forbidden", customForbidden.empty() ? "You may change only resources you own." : customForbidden);
         return std::nullopt;
     };
 
@@ -1257,49 +1258,62 @@ int main()
             const AuthResult auth = supabase.verifyAccessToken(request.get_header_value("Authorization"));
             if (!auth.verified)
                 return authenticationError(auth);
-            if (auto ownerError = verifyResourceOwner(request, id, auth.userId))
+            if (auto ownerError = verifyResourceOwner(request, id, auth.userId, "Only the owner can delete this resource."))
                 return std::move(*ownerError);
 
-            // 1. Check for active or pending borrow requests
-            const HttpResult borrowCheck = supabase.postgrest(
-                "GET", "borrow_requests?select=id,status&resource_id=eq." + urlEncode(id) +
-                       "&status=in.(pending,approved,return_requested)&limit=1",
-                tokenFromRequest(request));
-            if (borrowCheck.curlCode == CURLE_OK && borrowCheck.status >= 200 && borrowCheck.status < 300)
+            const auto numericId = parsePositiveBigint(id);
+            if (!numericId.has_value())
+                return jsonError(400, "invalid_request", "resource id must be a positive bigint.");
+
+            // 1. Try atomic RPC if available in database
+            crow::json::wvalue rpcParams;
+            rpcParams["p_resource_id"] = *numericId;
+            const HttpResult rpcResult = supabase.rpc("delete_resource_atomic", tokenFromRequest(request), rpcParams.dump());
+            if (rpcResult.curlCode == CURLE_OK && rpcResult.status >= 200 && rpcResult.status < 300)
             {
-                const auto bRows = crow::json::load(borrowCheck.body);
-                if (bRows && bRows.t() == crow::json::type::List && bRows.size() > 0)
+                return crow::response(204);
+            }
+            if (rpcResult.status >= 400 && rpcResult.status < 500 && rpcResult.body.find("on an active loan") != std::string::npos)
+            {
+                return rpcError(rpcResult, "This resource is currently on an active loan. Please confirm its return before deleting.");
+            }
+
+            // Fallback: direct PostgREST delete
+            // 2. Check for ACTIVE ongoing loans (approved or return_requested)
+            const HttpResult activeLoanCheck = supabase.postgrest(
+                "GET", "borrow_requests?select=id,status&resource_id=eq." + urlEncode(id) +
+                       "&status=in.(approved,return_requested)&limit=1",
+                tokenFromRequest(request));
+            if (activeLoanCheck.curlCode == CURLE_OK && activeLoanCheck.status >= 200 && activeLoanCheck.status < 300)
+            {
+                const auto aRows = crow::json::load(activeLoanCheck.body);
+                if (aRows && aRows.t() == crow::json::type::List && aRows.size() > 0)
                 {
-                    return jsonError(409, "active_requests_exist",
-                                     "Cannot delete listing with active or pending borrow requests. Please complete or reject them first.");
+                    return jsonError(409, "active_loan_exists",
+                                     "This resource is currently on an active loan. Please confirm its return before deleting.");
                 }
             }
 
-            // 2. Check for active or pending transfer requests (buy / donate)
+            // 3. Cancel any pending borrow requests for this listing
+            crow::json::wvalue cancelPayload;
+            cancelPayload["status"] = "cancelled";
+            supabase.postgrest("PATCH", "borrow_requests?resource_id=eq." + urlEncode(id) + "&status=eq.pending",
+                               tokenFromRequest(request), cancelPayload.dump(), "return=minimal");
+
+            // 4. Cancel any pending transfer requests (buy / donate)
             if (config.useMarketplaceFeatures)
             {
-                const HttpResult transferCheck = supabase.postgrest(
-                    "GET", "resource_transfer_requests?select=id,status&resource_id=eq." + urlEncode(id) +
-                           "&status=in.(pending,approved)&limit=1",
-                    tokenFromRequest(request));
-                if (transferCheck.curlCode == CURLE_OK && transferCheck.status >= 200 && transferCheck.status < 300)
-                {
-                    const auto tRows = crow::json::load(transferCheck.body);
-                    if (tRows && tRows.t() == crow::json::type::List && tRows.size() > 0)
-                    {
-                        return jsonError(409, "active_requests_exist",
-                                         "Cannot delete listing with active or pending transfer requests. Please complete or reject them first.");
-                    }
-                }
+                supabase.postgrest("PATCH", "resource_transfer_requests?resource_id=eq." + urlEncode(id) + "&status=eq.pending",
+                                   tokenFromRequest(request), cancelPayload.dump(), "return=minimal");
             }
 
-            // 3. Remove dependent auxiliary records that have RESTRICT foreign keys
+            // 5. Remove dependent auxiliary records that have RESTRICT foreign keys
             supabase.postgrest("DELETE", "resource_handover_details?resource_id=eq." + urlEncode(id),
                                tokenFromRequest(request), {}, "return=minimal");
             supabase.postgrest("DELETE", "resource_images?resource_id=eq." + urlEncode(id),
                                tokenFromRequest(request), {}, "return=minimal");
 
-            // 4. Delete the resource row from resources
+            // 6. Delete the resource row from resources
             const HttpResult upstream = supabase.postgrest(
                 "DELETE", "resources?id=eq." + urlEncode(id), tokenFromRequest(request), {}, "return=minimal");
             if (upstream.curlCode != CURLE_OK || upstream.status < 200 || upstream.status >= 300)
@@ -1308,16 +1322,26 @@ int main()
                 // fall back to safe withdrawal / soft delete as mandated by lifecycle rules
                 if (upstream.status == 409 || upstream.status == 400)
                 {
+                    // Try update_marketplace_resource_atomic first (SECURITY DEFINER with owner authorization)
+                    crow::json::wvalue atomicParams;
+                    atomicParams["p_resource_id"] = *numericId;
+                    atomicParams["p_changes"]["availability_status"] = "unavailable";
+                    const HttpResult atomicWithdraw = supabase.rpc(
+                        "update_marketplace_resource_atomic", tokenFromRequest(request), atomicParams.dump());
+                    if (atomicWithdraw.curlCode == CURLE_OK && atomicWithdraw.status >= 200 && atomicWithdraw.status < 300)
+                    {
+                        return crow::response(204);
+                    }
+
                     crow::json::wvalue withdrawPayload;
                     withdrawPayload["availability_status"] = "unavailable";
+                    withdrawPayload["listing_state"] = "withdrawn";
                     const HttpResult patchResult = supabase.postgrest(
                         "PATCH", "resources?id=eq." + urlEncode(id),
                         tokenFromRequest(request), withdrawPayload.dump(), "return=minimal");
                     if (patchResult.curlCode == CURLE_OK && patchResult.status >= 200 && patchResult.status < 300)
                     {
-                        crow::response resp(200, "{\"message\":\"Resource withdrawn and archived.\"}");
-                        resp.set_header("Content-Type", "application/json; charset=utf-8");
-                        return resp;
+                        return crow::response(204);
                     }
                 }
                 return upstreamError(upstream, "Could not delete resource.");
@@ -2014,15 +2038,88 @@ int main()
         parameters["p_request_id"] = *numericRequestId;
         const HttpResult rpcResult = supabase.rpc(
             functionName, tokenFromRequest(request), parameters.dump());
-        if (rpcResult.curlCode != CURLE_OK || rpcResult.status < 200 || rpcResult.status >= 300)
-            return rpcError(rpcResult, "Could not update borrowing request status.");
-        const auto rows = crow::json::load(rpcResult.body);
-        if (!rows || rows.t() != crow::json::type::List || rows.size() != 1 ||
-            rows[0].t() != crow::json::type::Object)
-            return jsonError(502, "invalid_upstream_response", "Supabase returned an invalid status update response.");
-        crow::response response(200, rpcResult.body);
-        response.set_header("Content-Type", "application/json; charset=utf-8");
-        return response;
+        if (rpcResult.curlCode == CURLE_OK && rpcResult.status >= 200 && rpcResult.status < 300)
+        {
+            const auto rows = crow::json::load(rpcResult.body);
+            if (!rows || rows.t() != crow::json::type::List || rows.size() != 1 ||
+                rows[0].t() != crow::json::type::Object)
+                return jsonError(502, "invalid_upstream_response", "Supabase returned an invalid status update response.");
+            crow::response response(200, rpcResult.body);
+            response.set_header("Content-Type", "application/json; charset=utf-8");
+            return response;
+        }
+
+        // If functionName is return_borrowed_resource and RPC failed (e.g. unassigned variable bug or missing RPC in Supabase),
+        // execute direct verified PostgREST return fallback
+        if (functionName == "return_borrowed_resource")
+        {
+            // 1. Fetch borrow request to check status and resource_id
+            const HttpResult reqCheck = supabase.postgrest(
+                "GET", "borrow_requests?id=eq." + urlEncode(requestId) + "&select=id,resource_id,borrower_id,status,requested_at,due_at,returned_at&limit=1",
+                tokenFromRequest(request));
+            if (reqCheck.curlCode == CURLE_OK && reqCheck.status >= 200 && reqCheck.status < 300)
+            {
+                const auto rRows = crow::json::load(reqCheck.body);
+                if (rRows && rRows.t() == crow::json::type::List && rRows.size() > 0)
+                {
+                    const auto& bReq = rRows[0];
+                    const std::string bStatus = bReq.has("status") ? static_cast<std::string>(bReq["status"].s()) : "";
+                    if (bStatus == "returned")
+                    {
+                        return jsonError(409, "already_returned", "This request has already been returned.");
+                    }
+                    if (bStatus != "approved" && bStatus != "return_requested")
+                    {
+                        return jsonError(409, "invalid_state", "Request is not active.");
+                    }
+
+                    const std::string resId = bReq.has("resource_id") ? std::to_string(bReq["resource_id"].i()) : "";
+                    // 2. Fetch resource to verify that authenticated user is the owner
+                    const HttpResult resCheck = supabase.postgrest(
+                        "GET", "resources?id=eq." + urlEncode(resId) + "&select=id,owner_id,availability_status&limit=1",
+                        tokenFromRequest(request));
+                    if (resCheck.curlCode == CURLE_OK && resCheck.status >= 200 && resCheck.status < 300)
+                    {
+                        const auto resRows = crow::json::load(resCheck.body);
+                        if (resRows && resRows.t() == crow::json::type::List && resRows.size() > 0)
+                        {
+                            const std::string ownerId = resRows[0].has("owner_id") ? static_cast<std::string>(resRows[0]["owner_id"].s()) : "";
+                            if (ownerId != auth.userId)
+                            {
+                                return jsonError(403, "forbidden", "Only the resource owner may return this request");
+                            }
+
+                            // 3. Mark borrow request as returned
+                            crow::json::wvalue retPayload;
+                            retPayload["status"] = "returned";
+                            const std::string stamp = currentUtcTimestamp();
+                            if (!stamp.empty())
+                                retPayload["returned_at"] = stamp;
+
+                            const HttpResult patchReq = supabase.postgrest(
+                                "PATCH", "borrow_requests?id=eq." + urlEncode(requestId) + "&status=in.(approved,return_requested)",
+                                tokenFromRequest(request), retPayload.dump(), "return=representation");
+
+                            // 4. Mark resource as available again
+                            crow::json::wvalue availPayload;
+                            availPayload["availability_status"] = "available";
+                            supabase.postgrest(
+                                "PATCH", "resources?id=eq." + urlEncode(resId),
+                                tokenFromRequest(request), availPayload.dump(), "return=minimal");
+
+                            if (patchReq.curlCode == CURLE_OK && patchReq.status >= 200 && patchReq.status < 300)
+                            {
+                                crow::response resp(200, patchReq.body);
+                                resp.set_header("Content-Type", "application/json; charset=utf-8");
+                                return resp;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return rpcError(rpcResult, "Could not update borrowing request status.");
     };
 
     CROW_ROUTE(app, "/api/borrow-requests/<string>/approve")

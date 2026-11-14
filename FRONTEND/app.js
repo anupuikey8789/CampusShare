@@ -20,6 +20,43 @@
     const priceMaxFilter = document.getElementById("priceMaxFilter");
     const conditionFilter = document.getElementById("conditionFilter");
     const sortSelect = document.getElementById("sortSelect");
+    const openFilterBtn = document.getElementById("openFilterBtn");
+    const closeFilterBtn = document.getElementById("closeFilterBtn");
+    const filterDrawer = document.getElementById("filterDrawer");
+    const filterDrawerBackdrop = document.getElementById("filterDrawerBackdrop");
+    const filterBadge = document.getElementById("filterBadge");
+    const drawerApplyBtn = document.getElementById("drawerApplyBtn");
+    const drawerResetBtn = document.getElementById("drawerResetBtn");
+    const searchClearBtn = document.getElementById("searchClearBtn");
+    const activeFilterChips = document.getElementById("activeFilterChips");
+    const drawerCategoryList = document.getElementById("drawerCategoryList");
+    const drawerConditionList = document.getElementById("drawerConditionList");
+    const drawerPriceSection = document.getElementById("drawerPriceSection");
+    const drawerPriceMin = document.getElementById("drawerPriceMin");
+    const drawerPriceMax = document.getElementById("drawerPriceMax");
+    const priceSliderMin = document.getElementById("priceSliderMin");
+    const priceSliderMax = document.getElementById("priceSliderMax");
+    const priceSliderRange = document.getElementById("priceSliderRange");
+    const drawerQuickPrices = document.getElementById("drawerQuickPrices");
+    const drawerSortList = document.getElementById("drawerSortList");
+    const drawerAvailabilityList = document.getElementById("drawerAvailabilityList");
+    const sliderMaxLabel = document.getElementById("sliderMaxLabel");
+    const drawerListingModeSection = document.getElementById("drawerListingModeSection");
+    const drawerListingModeTitle = document.getElementById("drawerListingModeTitle");
+    const drawerListingModeList = document.getElementById("drawerListingModeList");
+    const drawerModeAll = document.getElementById("drawerModeAll");
+    const drawerModeBorrow = document.getElementById("drawerModeBorrow");
+    const drawerModeSell = document.getElementById("drawerModeSell");
+    const drawerModeDonate = document.getElementById("drawerModeDonate");
+    const resourcesTagline = document.getElementById("resourcesTagline");
+
+    let stagingListingMode = "all";
+    let stagingCategory = "all";
+    let stagingCondition = "all";
+    let stagingMinPrice = "";
+    let stagingMaxPrice = "";
+    let stagingAvailability = "all";
+    let stagingSort = "newest";
     const resourceGrid = document.getElementById("resourceGrid");
     const resourceCount = document.getElementById("resourceCount");
     const noResults = document.getElementById("noResults");
@@ -78,7 +115,7 @@
     const myBorrowTab = document.getElementById("myBorrowTab");
     const mySellTab = document.getElementById("mySellTab");
     const myDonateTab = document.getElementById("myDonateTab");
-    let myResourcesActiveSubTab = "borrow";
+    let myResourcesActiveSubTab = "all";
     const sellResourcesMount = document.getElementById("sellResourcesMount");
     const donateResourcesMount = document.getElementById("donateResourcesMount");
     const sellMarketplaceNote = document.getElementById("sellMarketplaceNote");
@@ -114,6 +151,7 @@
     let categories = [];
     let categoryLoadState = "idle";
     let resources = [];
+    const resourceMetadataCache = new Map();
     let borrowingRequests = [];
     let resourcesLoaded = false;
     let requestsLoaded = false;
@@ -270,6 +308,12 @@
         if (typeof window.scrollTo === "function") window.scrollTo(0, 0);
 
         const showingMyResources = route === "my-resources";
+        if (resourcesTagline) {
+            resourcesTagline.textContent = showingMyResources ? "YOUR CAMPUS LISTINGS"
+                : route === "sell" ? "CAMPUS MARKETPLACE"
+                    : route === "donate" ? "SHARE WITH YOUR CAMPUS"
+                        : "YOUR LEARNING LIBRARY";
+        }
         resourcesPageHeading.textContent = showingMyResources ? "My Resources"
             : route === "sell" ? "Fixed-price listings"
                 : route === "donate" ? "Free donations" : "Explore Resources";
@@ -288,7 +332,8 @@
     }
 
     function setMyResourcesSubTab(subTab) {
-        myResourcesActiveSubTab = subTab;
+        myResourcesActiveSubTab = subTab || "all";
+        stagingListingMode = myResourcesActiveSubTab;
         if (myBorrowTab) {
             myBorrowTab.classList.toggle("is-active", subTab === "borrow");
             myBorrowTab.setAttribute("aria-selected", subTab === "borrow" ? "true" : "false");
@@ -301,12 +346,18 @@
             myDonateTab.classList.toggle("is-active", subTab === "donate");
             myDonateTab.setAttribute("aria-selected", subTab === "donate" ? "true" : "false");
         }
+        syncDrawerListingModePills();
         resourceViewTitle.textContent = resourceViewHeading();
         if (resourcesLoaded) renderResources();
     }
 
     function resourceViewHeading() {
-        if (currentRoute === "my-resources") return "My resources";
+        if (currentRoute === "my-resources") {
+            if (myResourcesActiveSubTab === "borrow") return "My borrow listings";
+            if (myResourcesActiveSubTab === "sell") return "My sell listings";
+            if (myResourcesActiveSubTab === "donate") return "My donation listings";
+            return "My resources";
+        }
         if (currentRoute === "sell") return "Sell listings";
         if (currentRoute === "donate") return "Donation listings";
         return "Browse resources";
@@ -412,6 +463,377 @@
             return option.value === selectedFormCategory;
         })) resourceCategory.value = selectedFormCategory;
         if (!resourceForm.hidden) updateCategoryFormState();
+        renderDrawerCategories();
+    }
+
+    function renderDrawerCategories() {
+        if (!drawerCategoryList) return;
+        drawerCategoryList.replaceChildren();
+        const allBtn = document.createElement("button");
+        allBtn.type = "button";
+        allBtn.className = `filter-pill ${stagingCategory === "all" ? "is-active" : ""}`;
+        allBtn.dataset.category = "all";
+        allBtn.textContent = "All Categories";
+        allBtn.addEventListener("click", function () {
+            stagingCategory = "all";
+            syncDrawerCategoryPills();
+        });
+        drawerCategoryList.appendChild(allBtn);
+
+        categories.forEach(function (category) {
+            if (!category || category.id == null || typeof category.name !== "string") return;
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = `filter-pill ${stagingCategory === String(category.id) ? "is-active" : ""}`;
+            btn.dataset.category = String(category.id);
+            btn.textContent = category.name;
+            btn.addEventListener("click", function () {
+                stagingCategory = String(category.id);
+                syncDrawerCategoryPills();
+            });
+            drawerCategoryList.appendChild(btn);
+        });
+    }
+
+    function syncDrawerCategoryPills() {
+        if (!drawerCategoryList) return;
+        Array.from(drawerCategoryList.children).forEach(function (btn) {
+            btn.classList.toggle("is-active", btn.dataset.category === stagingCategory);
+        });
+    }
+
+    function syncDrawerConditionPills() {
+        if (!drawerConditionList) return;
+        Array.from(drawerConditionList.children).forEach(function (btn) {
+            btn.classList.toggle("is-active", btn.dataset.condition === stagingCondition);
+        });
+    }
+
+    function syncDrawerSortPills() {
+        if (!drawerSortList) return;
+        Array.from(drawerSortList.children).forEach(function (btn) {
+            btn.classList.toggle("is-active", btn.dataset.sort === stagingSort);
+        });
+    }
+
+    function syncDrawerAvailabilityPills() {
+        if (!drawerAvailabilityList) return;
+        Array.from(drawerAvailabilityList.children).forEach(function (btn) {
+            btn.classList.toggle("is-active", btn.dataset.avail === stagingAvailability);
+        });
+    }
+
+    function getDynamicMaxPrice() {
+        let maxFound = 5000;
+        (resources || []).forEach(function (r) {
+            const p = Number(r.sale_price) || 0;
+            if (p > maxFound) maxFound = p;
+        });
+        return Math.ceil(maxFound / 1000) * 1000;
+    }
+
+    function syncDrawerListingModePills() {
+        if (!drawerListingModeSection) return;
+        const hideMode = currentRoute === "sell" || currentRoute === "donate" || currentRoute === "borrowing";
+        drawerListingModeSection.hidden = hideMode;
+        if (hideMode) return;
+
+        if (myResourcesOnly) {
+            if (drawerListingModeTitle) drawerListingModeTitle.textContent = "My Listings";
+            if (drawerModeAll) drawerModeAll.textContent = "All My Resources";
+            if (drawerModeBorrow) drawerModeBorrow.textContent = "My Borrow";
+            if (drawerModeSell) drawerModeSell.textContent = "My Sell";
+            if (drawerModeDonate) drawerModeDonate.textContent = "My Donate";
+        } else {
+            if (drawerListingModeTitle) drawerListingModeTitle.textContent = "Listing Type";
+            if (drawerModeAll) drawerModeAll.textContent = "All Listings";
+            if (drawerModeBorrow) drawerModeBorrow.textContent = "Borrow / Lend";
+            if (drawerModeSell) drawerModeSell.textContent = "For Sale";
+            if (drawerModeDonate) drawerModeDonate.textContent = "Donation";
+        }
+
+        if (drawerListingModeList) {
+            Array.from(drawerListingModeList.children).forEach(function (btn) {
+                btn.classList.toggle("is-active", btn.dataset.mode === stagingListingMode);
+            });
+        }
+    }
+
+    function syncDrawerPriceVisibility() {
+        if (!drawerPriceSection) return;
+        const mode = currentRoute === "sell" ? "sell"
+            : currentRoute === "donate" ? "donate"
+            : stagingListingMode;
+        if (mode === "donate" || mode === "borrow") {
+            drawerPriceSection.hidden = true;
+        } else {
+            drawerPriceSection.hidden = false;
+        }
+    }
+
+    function updateQuickPricePills() {
+        if (!drawerQuickPrices) return;
+        Array.from(drawerQuickPrices.children).forEach(function (btn) {
+            const min = btn.dataset.min ?? "";
+            const max = btn.dataset.max ?? "";
+            const match = min === stagingMinPrice && max === stagingMaxPrice;
+            btn.classList.toggle("is-active", match);
+        });
+    }
+
+    function updateSliderTrackHighlight() {
+        if (!priceSliderRange || !priceSliderRange.style || !priceSliderMin || !priceSliderMax) return;
+        const maxLimit = Number(priceSliderMax.max) || 10000;
+        const minVal = Number(priceSliderMin.value) || 0;
+        const maxVal = Number(priceSliderMax.value) || maxLimit;
+        const pctMin = Math.min(100, Math.max(0, (minVal / maxLimit) * 100));
+        const pctMax = Math.min(100, Math.max(0, (maxVal / maxLimit) * 100));
+        priceSliderRange.style.left = `${pctMin}%`;
+        priceSliderRange.style.width = `${Math.max(0, pctMax - pctMin)}%`;
+    }
+
+    function syncDrawerPriceSlider() {
+        if (!priceSliderMin || !priceSliderMax) return;
+        const maxLimit = getDynamicMaxPrice();
+        priceSliderMin.max = String(maxLimit);
+        priceSliderMax.max = String(maxLimit);
+        if (sliderMaxLabel) {
+            sliderMaxLabel.textContent = `₹${maxLimit.toLocaleString("en-IN")}+`;
+        }
+        const minVal = stagingMinPrice === "" ? 0 : Math.max(0, Number(stagingMinPrice) || 0);
+        const maxVal = stagingMaxPrice === "" ? maxLimit : Math.min(maxLimit, Number(stagingMaxPrice) || maxLimit);
+        priceSliderMin.value = String(minVal);
+        priceSliderMax.value = String(maxVal);
+        updateSliderTrackHighlight();
+    }
+
+    function syncDrawerWithState() {
+        syncDrawerListingModePills();
+        syncDrawerCategoryPills();
+        syncDrawerConditionPills();
+        syncDrawerSortPills();
+        syncDrawerAvailabilityPills();
+        if (drawerPriceMin) drawerPriceMin.value = stagingMinPrice;
+        if (drawerPriceMax) drawerPriceMax.value = stagingMaxPrice;
+        updateQuickPricePills();
+        syncDrawerPriceSlider();
+        syncDrawerPriceVisibility();
+    }
+
+    function openFilterDrawer() {
+        if (myResourcesOnly) {
+            stagingListingMode = myResourcesActiveSubTab || "all";
+        } else {
+            stagingListingMode = listingModeFilter ? listingModeFilter.value || "all" : "all";
+        }
+        stagingCategory = categoryFilter ? categoryFilter.value || "all" : "all";
+        stagingCondition = conditionFilter ? conditionFilter.value || "all" : "all";
+        stagingMinPrice = priceMinFilter ? priceMinFilter.value || "" : "";
+        stagingMaxPrice = priceMaxFilter ? priceMaxFilter.value || "" : "";
+        stagingAvailability = availabilityFilter ? availabilityFilter.value || "all" : "all";
+        stagingSort = sortSelect ? sortSelect.value || "newest" : "newest";
+
+        renderDrawerCategories();
+        syncDrawerWithState();
+
+        if (filterDrawer && filterDrawerBackdrop) {
+            filterDrawer.hidden = false;
+            filterDrawerBackdrop.hidden = false;
+            if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+                window.requestAnimationFrame(function () {
+                    filterDrawer.classList.add("is-open");
+                });
+            } else {
+                filterDrawer.classList.add("is-open");
+            }
+        }
+    }
+
+    function closeFilterDrawer() {
+        if (!filterDrawer) return;
+        filterDrawer.classList.remove("is-open");
+        const timer = typeof window !== "undefined" && typeof window.setTimeout === "function"
+            ? window.setTimeout : (typeof setTimeout === "function" ? setTimeout : function (fn) { fn(); });
+        timer(function () {
+            if (!filterDrawer.classList.contains("is-open")) {
+                filterDrawer.hidden = true;
+                if (filterDrawerBackdrop) filterDrawerBackdrop.hidden = true;
+            }
+        }, 280);
+    }
+
+    function applyDrawerFilters() {
+        if (stagingMinPrice !== "" && stagingMaxPrice !== "") {
+            const minNum = Number(stagingMinPrice);
+            const maxNum = Number(stagingMaxPrice);
+            if (minNum > maxNum) {
+                const temp = stagingMinPrice;
+                stagingMinPrice = stagingMaxPrice;
+                stagingMaxPrice = temp;
+            }
+        }
+        if (categoryFilter) categoryFilter.value = stagingCategory;
+        if (conditionFilter) conditionFilter.value = stagingCondition;
+        if (priceMinFilter) priceMinFilter.value = stagingMinPrice;
+        if (priceMaxFilter) priceMaxFilter.value = stagingMaxPrice;
+        if (availabilityFilter) availabilityFilter.value = stagingAvailability;
+        if (sortSelect) sortSelect.value = stagingSort;
+
+        if (myResourcesOnly) {
+            setMyResourcesSubTab(stagingListingMode);
+        } else {
+            if (listingModeFilter) listingModeFilter.value = stagingListingMode;
+        }
+
+        closeFilterDrawer();
+        renderResources();
+    }
+
+    function resetDrawerFilters() {
+        stagingListingMode = "all";
+        stagingCategory = "all";
+        stagingCondition = "all";
+        stagingMinPrice = "";
+        stagingMaxPrice = "";
+        stagingAvailability = "all";
+        stagingSort = "newest";
+        syncDrawerWithState();
+    }
+
+    function sortLabel(value) {
+        return ({
+            "newest": "Newest First",
+            "oldest": "Oldest First",
+            "price-low": "Price: Low to High",
+            "price-high": "Price: High to Low",
+            "title": "A to Z",
+            "title-desc": "Z to A"
+        })[value] || value;
+    }
+
+    function updateActiveFilterUI(rowCount, totalCount) {
+        let activeCount = 0;
+        const query = searchInput ? searchInput.value.trim() : "";
+        if (query) activeCount++;
+        if (categoryFilter && categoryFilter.value && categoryFilter.value !== "all") activeCount++;
+        if (conditionFilter && conditionFilter.value && conditionFilter.value !== "all") activeCount++;
+        if ((priceMinFilter && priceMinFilter.value !== "") || (priceMaxFilter && priceMaxFilter.value !== "")) activeCount++;
+        if (availabilityFilter && availabilityFilter.value && availabilityFilter.value !== "all") activeCount++;
+        if (sortSelect && sortSelect.value && sortSelect.value !== "newest") activeCount++;
+        if (myResourcesOnly && myResourcesActiveSubTab && myResourcesActiveSubTab !== "all") {
+            activeCount++;
+        } else if (!myResourcesOnly && listingModeFilter && listingModeFilter.value && listingModeFilter.value !== "all") {
+            activeCount++;
+        }
+
+        if (filterBadge) {
+            filterBadge.textContent = String(activeCount);
+            filterBadge.hidden = activeCount === 0;
+        }
+        if (searchClearBtn) {
+            searchClearBtn.hidden = !query;
+        }
+
+        const clearBtn = document.getElementById("clearFilters");
+        if (clearBtn) {
+            clearBtn.hidden = activeCount === 0;
+        }
+
+        if (activeFilterChips) {
+            activeFilterChips.replaceChildren();
+
+            function makeChip(labelText, onRemove) {
+                const chip = document.createElement("span");
+                chip.className = "filter-chip";
+                const labelSpan = document.createElement("span");
+                labelSpan.textContent = labelText;
+                chip.appendChild(labelSpan);
+                const removeBtn = document.createElement("button");
+                removeBtn.type = "button";
+                removeBtn.className = "filter-chip-remove";
+                removeBtn.textContent = "✕";
+                removeBtn.setAttribute("aria-label", `Remove ${labelText} filter`);
+                removeBtn.addEventListener("click", onRemove);
+                chip.appendChild(removeBtn);
+                activeFilterChips.appendChild(chip);
+            }
+
+            if (query) {
+                makeChip(`Search: "${query}"`, function () {
+                    if (searchInput) searchInput.value = "";
+                    if (searchClearBtn) searchClearBtn.hidden = true;
+                    renderResources();
+                });
+            }
+
+            if (categoryFilter && categoryFilter.value && categoryFilter.value !== "all") {
+                const catObj = categories.find(function (c) { return String(c.id) === categoryFilter.value; });
+                const catName = catObj ? catObj.name : categoryFilter.value;
+                makeChip(`Category: ${catName}`, function () {
+                    categoryFilter.value = "all";
+                    stagingCategory = "all";
+                    renderResources();
+                });
+            }
+
+            if (conditionFilter && conditionFilter.value && conditionFilter.value !== "all") {
+                makeChip(`Condition: ${itemConditionLabel(conditionFilter.value)}`, function () {
+                    conditionFilter.value = "all";
+                    stagingCondition = "all";
+                    renderResources();
+                });
+            }
+
+            const minP = priceMinFilter ? priceMinFilter.value : "";
+            const maxP = priceMaxFilter ? priceMaxFilter.value : "";
+            if (minP !== "" || maxP !== "") {
+                const priceText = minP !== "" && maxP !== "" ? `Price: ₹${minP}–₹${maxP}`
+                    : minP !== "" ? `Price: Above ₹${minP}` : `Price: Under ₹${maxP}`;
+                makeChip(priceText, function () {
+                    if (priceMinFilter) priceMinFilter.value = "";
+                    if (priceMaxFilter) priceMaxFilter.value = "";
+                    stagingMinPrice = "";
+                    stagingMaxPrice = "";
+                    renderResources();
+                });
+            }
+
+            if (availabilityFilter && availabilityFilter.value && availabilityFilter.value !== "all") {
+                makeChip(`Availability: ${availabilityFilter.value === "available" ? "Available Only" : availabilityFilter.value}`, function () {
+                    availabilityFilter.value = "all";
+                    stagingAvailability = "all";
+                    renderResources();
+                });
+            }
+
+            if (myResourcesOnly && myResourcesActiveSubTab && myResourcesActiveSubTab !== "all") {
+                const subLabel = myResourcesActiveSubTab === "borrow" ? "My Borrow"
+                    : myResourcesActiveSubTab === "sell" ? "My Sell" : "My Donate";
+                makeChip(`Type: ${subLabel}`, function () {
+                    setMyResourcesSubTab("all");
+                    stagingListingMode = "all";
+                    syncDrawerListingModePills();
+                });
+            } else if (!myResourcesOnly && listingModeFilter && listingModeFilter.value && listingModeFilter.value !== "all") {
+                const modeLabel = listingModeFilter.value === "borrow" ? "Borrow / Lend"
+                    : listingModeFilter.value === "sell" ? "For Sale" : "Donation";
+                makeChip(`Type: ${modeLabel}`, function () {
+                    if (listingModeFilter) listingModeFilter.value = "all";
+                    stagingListingMode = "all";
+                    syncDrawerListingModePills();
+                    renderResources();
+                });
+            }
+
+            if (sortSelect && sortSelect.value && sortSelect.value !== "newest") {
+                makeChip(`Sort: ${sortLabel(sortSelect.value)}`, function () {
+                    sortSelect.value = "newest";
+                    stagingSort = "newest";
+                    syncDrawerSortPills();
+                    renderResources();
+                });
+            }
+        }
     }
 
     function renderResourceTypeFilter() {
@@ -717,9 +1139,9 @@
                 resourceDetailsDialog.close();
                 openResourceForm(resource);
             }));
-            resourceDetailsActions.appendChild(makeActionButton("Delete listing", "danger-btn", function () {
+            resourceDetailsActions.appendChild(makeActionButton("Delete listing", "danger-btn", function (event) {
                 resourceDetailsDialog.close();
-                deleteResource(resource);
+                deleteResource(resource, event.currentTarget);
             }));
         } else if (resource.availability_status === "available") {
             if (marketplaceEnabled && (resource.listing_mode === "sell" || resource.listing_mode === "donate") && resource.listing_state === "active") {
@@ -776,6 +1198,7 @@
         resourceCount.textContent = myResourcesOnly
             ? `${rows.length} of ${resources.length} loaded resources are yours`
             : `${rows.length} shown · ${resources.length} loaded`;
+        updateActiveFilterUI(rows.length, resources.length);
 
         rows.forEach(function (resource) {
             const card = document.createElement("article");
@@ -848,8 +1271,8 @@
                 actions.appendChild(makeActionButton("Edit", "secondary-btn", function () {
                     openResourceForm(resource);
                 }));
-                actions.appendChild(makeActionButton("Delete", "danger-btn", function () {
-                    deleteResource(resource);
+                actions.appendChild(makeActionButton("Delete", "danger-btn", function (event) {
+                    deleteResource(resource, event.currentTarget);
                 }));
             } else if (marketplaceEnabled && !isOwner && resource.availability_status === "available" && resource.listing_state === "active" &&
                 (resource.listing_mode === "sell" || resource.listing_mode === "donate") && !hasActiveTransferRequest(resource.id)) {
@@ -1240,7 +1663,7 @@
     function makeRequestCard(request, isOwnerView) {
         const resource = resources.find(function (item) {
             return String(item.id) === String(request.resource_id);
-        });
+        }) || resourceMetadataCache.get(String(request.resource_id));
         const card = document.createElement("article");
         card.className = "borrow-request-card";
         const title = document.createElement("h4");
@@ -1304,6 +1727,11 @@
     async function updateBorrowRequestStatus(request, action, button) {
         const requestId = String(request.id);
         if (borrowStatusBusy.has(requestId)) return;
+        if (action === "return") {
+            const confirmed = typeof window !== "undefined" && typeof window.confirm === "function"
+                ? window.confirm("Confirm that this resource has been physically returned?") : true;
+            if (!confirmed) return;
+        }
         borrowStatusBusy.add(requestId);
         setButtonBusy(button, true, action === "approve" ? "Approving…" : action === "reject" ? "Rejecting…" : "Confirming…");
         setBorrowStatus("");
@@ -1382,7 +1810,7 @@
     }
 
     function makeTransferCard(request, ownerView) {
-        const resource = resources.find(function (item) { return String(item.id) === String(request.resource_id); });
+        const resource = resources.find(function (item) { return String(item.id) === String(request.resource_id); }) || resourceMetadataCache.get(String(request.resource_id));
         const card = document.createElement("article");
         card.className = "borrow-request-card";
         const title = document.createElement("h4");
@@ -1594,8 +2022,21 @@
             }
 
             const resourcesResult = results[1];
+            const deletedIds = getDeletedResourceIds();
             resourcesLoaded = resourcesResult.status === "fulfilled" && Array.isArray(resourcesResult.value);
-            resources = resourcesLoaded ? resourcesResult.value : [];
+            if (resourcesLoaded) {
+                resourcesResult.value.forEach(function (r) {
+                    resourceMetadataCache.set(String(r.id), r);
+                });
+            }
+            resources = resourcesLoaded
+                ? resourcesResult.value.filter(function (r) {
+                    return !deletedIds.has(String(r.id)) &&
+                           r.listing_state !== "withdrawn" &&
+                           r.listing_state !== "sold" &&
+                           r.listing_state !== "donated";
+                })
+                : [];
             renderResourceTypeFilter();
 
             const healthResult = results[2];
@@ -1945,18 +2386,50 @@
         }
     }
 
-    async function deleteResource(resource) {
-        if (!currentSession || String(resource.owner_id) !== String(currentSession.user.id)) return;
+    function getDeletedResourceIds() {
+        try {
+            const raw = typeof localStorage !== "undefined" ? localStorage.getItem("campusshare_deleted_resources") : null;
+            return new Set(raw ? JSON.parse(raw) : []);
+        } catch (_) {
+            return new Set();
+        }
+    }
+
+    function markResourceDeleted(id) {
+        try {
+            const ids = getDeletedResourceIds();
+            ids.add(String(id));
+            if (typeof localStorage !== "undefined") {
+                localStorage.setItem("campusshare_deleted_resources", JSON.stringify(Array.from(ids)));
+            }
+        } catch (_) {}
+    }
+
+    async function deleteResource(resource, button) {
+        if (!currentSession || !currentSession.user) return;
+        if (String(resource.owner_id) !== String(currentSession.user.id)) {
+            setStatus("Only the owner can delete this resource.", "error");
+            return;
+        }
         if (!window.confirm(`Delete “${resource.title}”? This cannot be undone.`)) return;
+        if (button) setButtonBusy(button, true, "Deleting…");
         setStatus("Deleting resource…");
         try {
             if (resourceImagesEnabled) {
-                const imageRows = await api.resourceImages(resource.id);
-                if (imageRows.length) {
-                    for (const row of imageRows) await api.deleteResourceImage(row.id);
-                }
+                try {
+                    const imageRows = await api.resourceImages(resource.id);
+                    if (imageRows.length) {
+                        for (const row of imageRows) await api.deleteResourceImage(row.id);
+                    }
+                } catch (_) {}
             }
             await api.deleteResource(resource.id);
+            markResourceDeleted(resource.id);
+            // Immediately remove resource locally so UI updates instantly
+            resources = resources.filter(function (r) { return String(r.id) !== String(resource.id); });
+            renderResources();
+            renderDashboard();
+
             const refreshed = await loadLibrary();
             setStatus(
                 refreshed ? "Resource deleted." : "Resource deleted, but some updated data could not be refreshed.",
@@ -1964,6 +2437,8 @@
             );
         } catch (error) {
             setStatus(errorMessage(error), "error");
+        } finally {
+            if (button && button.isConnected) setButtonBusy(button, false);
         }
     }
 
@@ -2019,6 +2494,7 @@
         priceMaxFilter.value = "";
         conditionFilter.value = "all";
         sortSelect.value = "newest";
+        setMyResourcesSubTab("all");
         navigateTo("my-resources");
     }
 
@@ -2028,6 +2504,7 @@
 
     function clearResourceFilters() {
         searchInput.value = "";
+        if (searchClearBtn) searchClearBtn.hidden = true;
         categoryFilter.value = "all";
         resourceTypeFilter.value = "all";
         listingModeFilter.value = "all";
@@ -2037,6 +2514,10 @@
         conditionFilter.value = "all";
         sortSelect.value = "newest";
         myResourcesOnly = currentRoute === "my-resources";
+        if (myResourcesOnly) {
+            setMyResourcesSubTab("all");
+        }
+        resetDrawerFilters();
         renderResources();
     }
 
@@ -2235,7 +2716,10 @@
     });
     sidebarBackdrop.addEventListener("click", function () { setSidebarOpen(false); });
     document.addEventListener("keydown", function (event) {
-        if (event.key === "Escape") setSidebarOpen(false);
+        if (event.key === "Escape") {
+            setSidebarOpen(false);
+            closeFilterDrawer();
+        }
     });
     document.getElementById("closeResourceDetails").addEventListener("click", function () { resourceDetailsDialog.close(); });
     resourceDetailsDialog.addEventListener("click", function (event) {
@@ -2244,7 +2728,20 @@
     if (myBorrowTab) myBorrowTab.addEventListener("click", function () { setMyResourcesSubTab("borrow"); });
     if (mySellTab) mySellTab.addEventListener("click", function () { setMyResourcesSubTab("sell"); });
     if (myDonateTab) myDonateTab.addEventListener("click", function () { setMyResourcesSubTab("donate"); });
-    searchInput.addEventListener("input", renderResources);
+
+    searchInput.addEventListener("input", function () {
+        if (searchClearBtn) searchClearBtn.hidden = !searchInput.value.trim();
+        renderResources();
+    });
+    if (searchClearBtn) {
+        searchClearBtn.addEventListener("click", function () {
+            searchInput.value = "";
+            searchClearBtn.hidden = true;
+            renderResources();
+            if (typeof searchInput.focus === "function") searchInput.focus();
+        });
+    }
+
     categoryFilter.addEventListener("change", renderResources);
     resourceTypeFilter.addEventListener("change", renderResources);
     listingModeFilter.addEventListener("change", renderResources);
@@ -2252,7 +2749,111 @@
     priceMinFilter.addEventListener("input", renderResources);
     priceMaxFilter.addEventListener("input", renderResources);
     conditionFilter.addEventListener("change", renderResources);
-    sortSelect.addEventListener("change", renderResources);
+    sortSelect.addEventListener("change", function () {
+        stagingSort = sortSelect.value;
+        syncDrawerSortPills();
+        renderResources();
+    });
+
+    if (openFilterBtn) openFilterBtn.addEventListener("click", openFilterDrawer);
+    if (closeFilterBtn) closeFilterBtn.addEventListener("click", closeFilterDrawer);
+    if (filterDrawerBackdrop) filterDrawerBackdrop.addEventListener("click", closeFilterDrawer);
+    if (drawerApplyBtn) drawerApplyBtn.addEventListener("click", applyDrawerFilters);
+    if (drawerResetBtn) drawerResetBtn.addEventListener("click", resetDrawerFilters);
+
+    if (drawerListingModeList) {
+        drawerListingModeList.addEventListener("click", function (event) {
+            const btn = event.target.closest("button.filter-pill");
+            if (!btn) return;
+            stagingListingMode = btn.dataset.mode || "all";
+            syncDrawerListingModePills();
+            syncDrawerPriceVisibility();
+        });
+    }
+
+    if (drawerConditionList) {
+        drawerConditionList.addEventListener("click", function (event) {
+            const btn = event.target.closest("button.filter-pill");
+            if (!btn) return;
+            stagingCondition = btn.dataset.condition || "all";
+            syncDrawerConditionPills();
+        });
+    }
+
+    if (drawerSortList) {
+        drawerSortList.addEventListener("click", function (event) {
+            const btn = event.target.closest("button.filter-pill");
+            if (!btn) return;
+            stagingSort = btn.dataset.sort || "newest";
+            syncDrawerSortPills();
+        });
+    }
+
+    if (drawerAvailabilityList) {
+        drawerAvailabilityList.addEventListener("click", function (event) {
+            const btn = event.target.closest("button.filter-pill");
+            if (!btn) return;
+            stagingAvailability = btn.dataset.avail || "all";
+            syncDrawerAvailabilityPills();
+        });
+    }
+
+    if (drawerQuickPrices) {
+        drawerQuickPrices.addEventListener("click", function (event) {
+            const btn = event.target.closest("button.filter-pill");
+            if (!btn) return;
+            stagingMinPrice = btn.dataset.min ?? "";
+            stagingMaxPrice = btn.dataset.max ?? "";
+            if (drawerPriceMin) drawerPriceMin.value = stagingMinPrice;
+            if (drawerPriceMax) drawerPriceMax.value = stagingMaxPrice;
+            updateQuickPricePills();
+            syncDrawerPriceSlider();
+        });
+    }
+
+    if (drawerPriceMin) {
+        drawerPriceMin.addEventListener("input", function () {
+            stagingMinPrice = drawerPriceMin.value.trim();
+            updateQuickPricePills();
+            syncDrawerPriceSlider();
+        });
+    }
+    if (drawerPriceMax) {
+        drawerPriceMax.addEventListener("input", function () {
+            stagingMaxPrice = drawerPriceMax.value.trim();
+            updateQuickPricePills();
+            syncDrawerPriceSlider();
+        });
+    }
+
+    if (priceSliderMin && priceSliderMax) {
+        priceSliderMin.addEventListener("input", function () {
+            let minVal = Number(priceSliderMin.value);
+            const maxVal = Number(priceSliderMax.value);
+            if (minVal > maxVal) {
+                minVal = maxVal;
+                priceSliderMin.value = String(minVal);
+            }
+            stagingMinPrice = minVal > 0 ? String(minVal) : "";
+            if (drawerPriceMin) drawerPriceMin.value = stagingMinPrice;
+            updateQuickPricePills();
+            updateSliderTrackHighlight();
+        });
+        priceSliderMax.addEventListener("input", function () {
+            const minVal = Number(priceSliderMin.value);
+            let maxVal = Number(priceSliderMax.value);
+            if (maxVal < minVal) {
+                maxVal = minVal;
+                priceSliderMax.value = String(maxVal);
+            }
+            const limit = Number(priceSliderMax.max) || 10000;
+            stagingMaxPrice = maxVal < limit ? String(maxVal) : "";
+            if (drawerPriceMax) drawerPriceMax.value = stagingMaxPrice;
+            updateQuickPricePills();
+            updateSliderTrackHighlight();
+        });
+    }
+
     setAuthMode("login");
     applySession(null, false);
 })();
