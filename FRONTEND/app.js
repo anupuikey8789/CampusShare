@@ -1640,6 +1640,11 @@
     async function updateBorrowRequestStatus(request, action, button) {
         const requestId = String(request.id);
         if (borrowStatusBusy.has(requestId)) return;
+        if (action === "return") {
+            const confirmed = typeof window !== "undefined" && typeof window.confirm === "function"
+                ? window.confirm("Confirm that this resource has been physically returned?") : true;
+            if (!confirmed) return;
+        }
         borrowStatusBusy.add(requestId);
         setButtonBusy(button, true, action === "approve" ? "Approving…" : action === "reject" ? "Rejecting…" : "Confirming…");
         setBorrowStatus("");
