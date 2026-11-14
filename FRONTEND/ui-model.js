@@ -121,8 +121,45 @@
         const settings = options || {};
         if (!settings.isOwner || !settings.statusActionsEnabled || !request || request.id == null) return [];
         if (request.status === "pending") return ["approve", "reject"];
-        if (request.status === "approved") return ["return"];
+        if (request.status === "approved" || request.status === "return_requested") return ["return"];
         return [];
+    }
+
+    function conversationRole(conversation, userId) {
+        if (!conversation || !userId) return null;
+        if (String(conversation.borrower_id) === String(userId)) return "borrower";
+        if (String(conversation.owner_id) === String(userId)) return "owner";
+        return null;
+    }
+
+    function conversationPartnerName(conversation, userId) {
+        if (!conversation || !userId) return "Student";
+        return String(conversation.borrower_id) === String(userId)
+            ? (conversation.owner_name || "Owner")
+            : (conversation.borrower_name || "Borrower");
+    }
+
+    function activeMeetingProposal(proposals) {
+        return (Array.isArray(proposals) ? proposals : []).find(function (p) {
+            return p && p.status === "pending";
+        }) || null;
+    }
+
+    function confirmedMeeting(proposals) {
+        return (Array.isArray(proposals) ? proposals : []).find(function (p) {
+            return p && p.status === "accepted";
+        }) || null;
+    }
+
+    function formatMeetingTimeIST(timeStr) {
+        if (!timeStr || typeof timeStr !== "string" || !timeStr.includes(":")) return timeStr || "";
+        const parts = timeStr.split(":");
+        const hours = parseInt(parts[0], 10);
+        const minutes = parts[1];
+        if (isNaN(hours)) return timeStr;
+        const ampm = hours >= 12 ? "PM" : "AM";
+        const standardHour = hours % 12 || 12;
+        return `${standardHour}:${minutes} ${ampm} IST`;
     }
 
     function validateResourcePayload(payload) {
@@ -142,6 +179,11 @@
         dashboardMarketplaceStats: dashboardMarketplaceStats,
         canRequestBorrow: canRequestBorrow,
         ownerRequestActions: ownerRequestActions,
+        conversationRole: conversationRole,
+        conversationPartnerName: conversationPartnerName,
+        activeMeetingProposal: activeMeetingProposal,
+        confirmedMeeting: confirmedMeeting,
+        formatMeetingTimeIST: formatMeetingTimeIST,
         validateResourcePayload: validateResourcePayload
     });
 })(window);

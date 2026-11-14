@@ -12,9 +12,11 @@
 #include <fstream>
 #include <future>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -41,6 +43,7 @@ struct Config
     bool useBorrowStatusRpc = false;
     bool useMarketplaceFeatures = false;
     bool useResourceImages = false;
+    bool useCommunicationFeatures = false;
     std::vector<std::string> allowedOrigins = {
         "http://localhost:5500", "http://127.0.0.1:5500",
         "http://localhost:5501", "http://127.0.0.1:5501"};
@@ -332,6 +335,14 @@ bool loadConfig(Config& config)
         return false;
     }
     config.useResourceImages = *useResourceImages;
+    const auto useCommunicationFeatures = parseBooleanFlag(
+        env("SUPABASE_COMMUNICATION_ENABLED", "false"));
+    if (!useCommunicationFeatures.has_value())
+    {
+        std::cerr << "Invalid SUPABASE_COMMUNICATION_ENABLED; expected true or false.\n";
+        return false;
+    }
+    config.useCommunicationFeatures = *useCommunicationFeatures;
     if (config.useBorrowStatusRpc && !config.useAtomicResourceUpdateRpc)
     {
         std::cerr << "SUPABASE_RPC_BORROW_STATUS requires SUPABASE_RPC_ATOMIC_RESOURCE_UPDATE=true.\n";
@@ -444,15 +455,35 @@ bool isSafeBearerToken(const std::string& token)
 
 bool isUtcTimestamp(const std::string& value)
 {
-    if (value.size() != 20 || value[4] != '-' || value[7] != '-' ||
-        value[10] != 'T' || value[13] != ':' || value[16] != ':' || value[19] != 'Z')
-        return false;
-    for (std::size_t i = 0; i < value.size(); ++i)
+    if (value.size() == 20)
     {
-        if (i == 4 || i == 7 || i == 10 || i == 13 || i == 16 || i == 19)
-            continue;
-        if (!std::isdigit(static_cast<unsigned char>(value[i])))
+        if (value[4] != '-' || value[7] != '-' ||
+            value[10] != 'T' || value[13] != ':' || value[16] != ':' || value[19] != 'Z')
             return false;
+        for (std::size_t i = 0; i < value.size(); ++i)
+        {
+            if (i == 4 || i == 7 || i == 10 || i == 13 || i == 16 || i == 19)
+                continue;
+            if (!std::isdigit(static_cast<unsigned char>(value[i])))
+                return false;
+        }
+    }
+    else if (value.size() == 24)
+    {
+        if (value[4] != '-' || value[7] != '-' ||
+            value[10] != 'T' || value[13] != ':' || value[16] != ':' || value[19] != '.' || value[23] != 'Z')
+            return false;
+        for (std::size_t i = 0; i < value.size(); ++i)
+        {
+            if (i == 4 || i == 7 || i == 10 || i == 13 || i == 16 || i == 19 || i == 23)
+                continue;
+            if (!std::isdigit(static_cast<unsigned char>(value[i])))
+                return false;
+        }
+    }
+    else
+    {
+        return false;
     }
     const int year = std::stoi(value.substr(0, 4));
     const int month = std::stoi(value.substr(5, 2));
@@ -482,6 +513,32 @@ std::string currentUtcTimestamp()
         return {};
     return buffer;
 }
+
+bool isValidUuid(const std::string& value)
+{
+    if (value.size() != 36)
+        return false;
+    for (std::size_t i = 0; i < 36; ++i)
+    {
+        if (i == 8 || i == 13 || i == 18 || i == 23)
+        {
+            if (value[i] != '-')
+                return false;
+        }
+        else
+        {
+            if (!std::isxdigit(static_cast<unsigned char>(value[i])))
+                return false;
+        }
+    }
+    return true;
+}
+
+struct CachedAuthToken
+{
+    AuthResult auth;
+    std::chrono::steady_clock::time_point expiresAt;
+};
 
 class SupabaseClient
 {
@@ -556,6 +613,20 @@ public:
             return auth;
         }
 
+        {
+            std::lock_guard<std::mutex> lock(authCacheMutex_);
+            const auto now = std::chrono::steady_clock::now();
+            auto it = authCache_.find(token);
+            if (it != authCache_.end())
+            {
+                if (now < it->second.expiresAt)
+                {
+                    return it->second.auth;
+                }
+                authCache_.erase(it);
+            }
+        }
+
         const HttpResult result = request("GET", "/auth/v1/user", token);
         if (result.curlCode != CURLE_OK || result.status == 0 ||
             result.status == 429 || result.status >= 500)
@@ -592,6 +663,12 @@ public:
 
         auth.userId = parsed["id"].s();
         auth.verified = !auth.userId.empty();
+        if (auth.verified)
+        {
+            std::lock_guard<std::mutex> lock(authCacheMutex_);
+            // Cache verified token for 45 seconds to avoid hammering Supabase Auth
+            authCache_[token] = CachedAuthToken{ auth, std::chrono::steady_clock::now() + std::chrono::seconds(45) };
+        }
         return auth;
     }
 
@@ -635,6 +712,8 @@ public:
 
 private:
     const Config& config_;
+    mutable std::mutex authCacheMutex_;
+    mutable std::unordered_map<std::string, CachedAuthToken> authCache_;
 };
 
 crow::response jsonError(int status, const std::string& code,
@@ -709,9 +788,6 @@ crow::response upstreamError(const HttpResult& result, const std::string& messag
 
 crow::response rpcError(const HttpResult& result, const std::string& fallback)
 {
-    if (result.curlCode != CURLE_OK || result.status == 0 || result.status >= 500)
-        return jsonError(502, "upstream_error", fallback);
-
     const auto parsed = crow::json::load(result.body);
     std::string code;
     std::string dbMessage;
@@ -723,6 +799,15 @@ crow::response rpcError(const HttpResult& result, const std::string& fallback)
             dbMessage = parsed["message"].s();
     }
 
+    if (result.curlCode != CURLE_OK || result.status == 0)
+        return jsonError(502, "upstream_error", fallback);
+
+    if (result.status >= 500)
+    {
+        const std::string upstreamMsg = !dbMessage.empty() ? dbMessage : fallback;
+        return jsonError(502, "upstream_error", upstreamMsg);
+    }
+
     if (result.status == 401 || code == "28000")
         return jsonError(401, "unauthorized", "A valid Supabase access token is required.");
     if (result.status == 403 || code == "42501" || dbMessage == "Only the owner may change availability")
@@ -732,14 +817,23 @@ crow::response rpcError(const HttpResult& result, const std::string& fallback)
     if (result.status == 409 || code == "P0001" || code == "23505" || code == "23P01" ||
         dbMessage == "Cannot request own resource" || dbMessage == "Resource unavailable" ||
         dbMessage == "Active request exists" || dbMessage == "Approved loan remains active")
-        return jsonError(409, "conflict", "The operation conflicts with the current resource or request state.");
+    {
+        const std::string conflictMsg = !dbMessage.empty() ? dbMessage : "The operation conflicts with the current resource or request state.";
+        return jsonError(409, "conflict", conflictMsg);
+    }
     if (dbMessage == "Authentication required")
         return jsonError(401, "unauthorized", "A valid Supabase access token is required.");
     if (dbMessage == "due_at precedes request time" || dbMessage == "Invalid availability status" ||
         code == "22023" || code == "22P02" || code == "22007" || code == "23503" || code == "23514")
         return jsonError(400, "invalid_data", "Supabase rejected the supplied value.");
-    if (code == "PGRST202" || code == "PGRST204")
+    if (code == "PGRST202")
+    {
+        if (dbMessage.find("Could not find the function") != std::string::npos)
+            return jsonError(502, "rpc_missing", "The required Supabase RPC function is not installed in the database.");
         return jsonError(502, "rpc_unavailable", "The configured Supabase RPC is unavailable or has a different signature.");
+    }
+    if (code == "PGRST204")
+        return jsonError(502, "rpc_signature_mismatch", "The Supabase RPC function signature or parameters do not match.");
     if (result.status == 404)
         return jsonError(404, "not_found", "The requested record was not found.");
     return jsonError(422, "database_rejected", "Supabase rejected the operation.");
@@ -1165,10 +1259,69 @@ int main()
                 return authenticationError(auth);
             if (auto ownerError = verifyResourceOwner(request, id, auth.userId))
                 return std::move(*ownerError);
+
+            // 1. Check for active or pending borrow requests
+            const HttpResult borrowCheck = supabase.postgrest(
+                "GET", "borrow_requests?select=id,status&resource_id=eq." + urlEncode(id) +
+                       "&status=in.(pending,approved,return_requested)&limit=1",
+                tokenFromRequest(request));
+            if (borrowCheck.curlCode == CURLE_OK && borrowCheck.status >= 200 && borrowCheck.status < 300)
+            {
+                const auto bRows = crow::json::load(borrowCheck.body);
+                if (bRows && bRows.t() == crow::json::type::List && bRows.size() > 0)
+                {
+                    return jsonError(409, "active_requests_exist",
+                                     "Cannot delete listing with active or pending borrow requests. Please complete or reject them first.");
+                }
+            }
+
+            // 2. Check for active or pending transfer requests (buy / donate)
+            if (config.useMarketplaceFeatures)
+            {
+                const HttpResult transferCheck = supabase.postgrest(
+                    "GET", "resource_transfer_requests?select=id,status&resource_id=eq." + urlEncode(id) +
+                           "&status=in.(pending,approved)&limit=1",
+                    tokenFromRequest(request));
+                if (transferCheck.curlCode == CURLE_OK && transferCheck.status >= 200 && transferCheck.status < 300)
+                {
+                    const auto tRows = crow::json::load(transferCheck.body);
+                    if (tRows && tRows.t() == crow::json::type::List && tRows.size() > 0)
+                    {
+                        return jsonError(409, "active_requests_exist",
+                                         "Cannot delete listing with active or pending transfer requests. Please complete or reject them first.");
+                    }
+                }
+            }
+
+            // 3. Remove dependent auxiliary records that have RESTRICT foreign keys
+            supabase.postgrest("DELETE", "resource_handover_details?resource_id=eq." + urlEncode(id),
+                               tokenFromRequest(request), {}, "return=minimal");
+            supabase.postgrest("DELETE", "resource_images?resource_id=eq." + urlEncode(id),
+                               tokenFromRequest(request), {}, "return=minimal");
+
+            // 4. Delete the resource row from resources
             const HttpResult upstream = supabase.postgrest(
                 "DELETE", "resources?id=eq." + urlEncode(id), tokenFromRequest(request), {}, "return=minimal");
             if (upstream.curlCode != CURLE_OK || upstream.status < 200 || upstream.status >= 300)
+            {
+                // If hard delete is rejected by PostgreSQL foreign key constraint (e.g. past completed/returned loans),
+                // fall back to safe withdrawal / soft delete as mandated by lifecycle rules
+                if (upstream.status == 409 || upstream.status == 400)
+                {
+                    crow::json::wvalue withdrawPayload;
+                    withdrawPayload["availability_status"] = "unavailable";
+                    const HttpResult patchResult = supabase.postgrest(
+                        "PATCH", "resources?id=eq." + urlEncode(id),
+                        tokenFromRequest(request), withdrawPayload.dump(), "return=minimal");
+                    if (patchResult.curlCode == CURLE_OK && patchResult.status >= 200 && patchResult.status < 300)
+                    {
+                        crow::response resp(200, "{\"message\":\"Resource withdrawn and archived.\"}");
+                        resp.set_header("Content-Type", "application/json; charset=utf-8");
+                        return resp;
+                    }
+                }
                 return upstreamError(upstream, "Could not delete resource.");
+            }
             return crow::response(204);
         });
 
@@ -1182,6 +1335,12 @@ int main()
         if (!config.useResourceImages)
             return jsonError(503, "resource_images_disabled",
                              "Resource image APIs are disabled until the staging image schema and Storage policies are reviewed.");
+        return std::nullopt;
+    };
+    const auto communicationGate = [&]() -> std::optional<crow::response> {
+        if (!config.useCommunicationFeatures)
+            return jsonError(503, "communication_disabled",
+                             "Borrowing communication features are disabled until the staging migration is deployed and reviewed.");
         return std::nullopt;
     };
     const auto marketplaceRpc = [&](const crow::request& request, const std::string& function,
@@ -1803,6 +1962,8 @@ int main()
                     !isUtcTimestamp(static_cast<std::string>(parsed["due_at"].s())))
                     return jsonError(400, "invalid_date", "due_at must be null or a valid UTC timestamp.");
                 dueAt = static_cast<std::string>(parsed["due_at"].s());
+                if (dueAt.size() == 24)
+                    dueAt = dueAt.substr(0, 19) + "Z";
             }
 
             const std::string currentTime = currentUtcTimestamp();
@@ -1883,7 +2044,10 @@ int main()
                 if (parsed["due_at"].t() != crow::json::type::String ||
                     !isUtcTimestamp(static_cast<std::string>(parsed["due_at"].s())))
                     return jsonError(400, "invalid_date", "due_at must be null or a valid UTC timestamp.");
-                parameters["p_due_at"] = static_cast<std::string>(parsed["due_at"].s());
+                std::string approvedDue = static_cast<std::string>(parsed["due_at"].s());
+                if (approvedDue.size() == 24)
+                    approvedDue = approvedDue.substr(0, 19) + "Z";
+                parameters["p_due_at"] = std::move(approvedDue);
             }
             else
                 parameters["p_due_at"] = nullptr;
@@ -1911,6 +2075,321 @@ int main()
             if (!isJsonObject(parsed) || parsed.size() != 0)
                 return jsonError(400, "invalid_request", "An empty JSON object is required.");
             return invokeBorrowStatusRpc(request, requestId, "return_borrowed_resource", {});
+        });
+
+    CROW_ROUTE(app, "/api/conversations")
+        .methods(crow::HTTPMethod::Get)
+        ([&](const crow::request& request) {
+            const AuthResult auth = supabase.verifyAccessToken(request.get_header_value("Authorization"));
+            if (!auth.verified)
+                return authenticationError(auth);
+            if (auto disabled = communicationGate())
+                return std::move(*disabled);
+
+            const HttpResult rpcResult = supabase.rpc("get_my_conversations", tokenFromRequest(request), "{}");
+            if (rpcResult.curlCode != CURLE_OK || rpcResult.status < 200 || rpcResult.status >= 300)
+                return rpcError(rpcResult, "Could not retrieve conversations.");
+
+            crow::response response(200, rpcResult.body);
+            response.set_header("Content-Type", "application/json; charset=utf-8");
+            return response;
+        });
+
+    CROW_ROUTE(app, "/api/conversations/<string>/messages")
+        .methods(crow::HTTPMethod::Get)
+        ([&](const crow::request& request, const std::string& conversationId) {
+            const AuthResult auth = supabase.verifyAccessToken(request.get_header_value("Authorization"));
+            if (!auth.verified)
+                return authenticationError(auth);
+            if (auto disabled = communicationGate())
+                return std::move(*disabled);
+
+            if (!isValidUuid(conversationId))
+                return jsonError(400, "invalid_request", "conversation_id must be a valid UUID.");
+
+            crow::json::wvalue parameters;
+            parameters["p_conversation_id"] = conversationId;
+            const HttpResult rpcResult = supabase.rpc("get_conversation_messages", tokenFromRequest(request), parameters.dump());
+            if (rpcResult.curlCode != CURLE_OK || rpcResult.status < 200 || rpcResult.status >= 300)
+                return rpcError(rpcResult, "Could not retrieve message history.");
+
+            crow::response response(200, rpcResult.body);
+            response.set_header("Content-Type", "application/json; charset=utf-8");
+            return response;
+        });
+
+    CROW_ROUTE(app, "/api/conversations/<string>/messages")
+        .methods(crow::HTTPMethod::Post)
+        ([&](const crow::request& request, const std::string& conversationId) {
+            const AuthResult auth = supabase.verifyAccessToken(request.get_header_value("Authorization"));
+            if (!auth.verified)
+                return authenticationError(auth);
+            if (auto disabled = communicationGate())
+                return std::move(*disabled);
+
+            if (!isValidUuid(conversationId))
+                return jsonError(400, "invalid_request", "conversation_id must be a valid UUID.");
+
+            if (request.body.size() > maxMutationBodyBytes)
+                return jsonError(413, "payload_too_large", "Request body exceeds the 16 KiB limit.");
+
+            const auto parsed = crow::json::load(request.body);
+            if (!isJsonObject(parsed))
+                return jsonError(400, "invalid_request", "A JSON object is required.");
+
+            if (!parsed.has("content") || parsed["content"].t() != crow::json::type::String)
+                return jsonError(400, "invalid_request", "content is required and must be a string.");
+
+            if (!parsed.has("client_idempotency_key") || parsed["client_idempotency_key"].t() != crow::json::type::String)
+                return jsonError(400, "invalid_request", "client_idempotency_key is required and must be a string.");
+
+            const std::string content = trim(static_cast<std::string>(parsed["content"].s()));
+            const std::string idempotencyKey = trim(static_cast<std::string>(parsed["client_idempotency_key"].s()));
+
+            if (content.empty() || content.size() > 2000)
+                return jsonError(400, "invalid_request", "content must be between 1 and 2000 characters.");
+
+            if (idempotencyKey.size() < 8 || idempotencyKey.size() > 128)
+                return jsonError(400, "invalid_request", "client_idempotency_key must be between 8 and 128 characters.");
+
+            crow::json::wvalue parameters;
+            parameters["p_conversation_id"] = conversationId;
+            parameters["p_content"] = content;
+            parameters["p_idempotency_key"] = idempotencyKey;
+
+            const HttpResult rpcResult = supabase.rpc("send_message", tokenFromRequest(request), parameters.dump());
+            if (rpcResult.curlCode != CURLE_OK || rpcResult.status < 200 || rpcResult.status >= 300)
+                return rpcError(rpcResult, "Could not send message.");
+
+            crow::response response(201, rpcResult.body);
+            response.set_header("Content-Type", "application/json; charset=utf-8");
+            return response;
+        });
+
+    CROW_ROUTE(app, "/api/conversations/<string>/meetings")
+        .methods(crow::HTTPMethod::Get)
+        ([&](const crow::request& request, const std::string& conversationId) {
+            const AuthResult auth = supabase.verifyAccessToken(request.get_header_value("Authorization"));
+            if (!auth.verified)
+                return authenticationError(auth);
+            if (auto disabled = communicationGate())
+                return std::move(*disabled);
+
+            if (!isValidUuid(conversationId))
+                return jsonError(400, "invalid_request", "conversation_id must be a valid UUID.");
+
+            crow::json::wvalue parameters;
+            parameters["p_conversation_id"] = conversationId;
+            const HttpResult rpcResult = supabase.rpc("get_conversation_proposals", tokenFromRequest(request), parameters.dump());
+            if (rpcResult.curlCode != CURLE_OK || rpcResult.status < 200 || rpcResult.status >= 300)
+                return rpcError(rpcResult, "Could not retrieve meeting proposals.");
+
+            crow::response response(200, rpcResult.body);
+            response.set_header("Content-Type", "application/json; charset=utf-8");
+            return response;
+        });
+
+    CROW_ROUTE(app, "/api/conversations/<string>/meetings")
+        .methods(crow::HTTPMethod::Post)
+        ([&](const crow::request& request, const std::string& conversationId) {
+            const AuthResult auth = supabase.verifyAccessToken(request.get_header_value("Authorization"));
+            if (!auth.verified)
+                return authenticationError(auth);
+            if (auto disabled = communicationGate())
+                return std::move(*disabled);
+
+            if (!isValidUuid(conversationId))
+                return jsonError(400, "invalid_request", "conversation_id must be a valid UUID.");
+
+            if (request.body.size() > maxMutationBodyBytes)
+                return jsonError(413, "payload_too_large", "Request body exceeds the 16 KiB limit.");
+
+            const auto parsed = crow::json::load(request.body);
+            if (!isJsonObject(parsed))
+                return jsonError(400, "invalid_request", "A JSON object is required.");
+
+            if (!parsed.has("meeting_date") || parsed["meeting_date"].t() != crow::json::type::String ||
+                !parsed.has("meeting_time") || parsed["meeting_time"].t() != crow::json::type::String ||
+                !parsed.has("location") || parsed["location"].t() != crow::json::type::String)
+                return jsonError(400, "invalid_request", "meeting_date, meeting_time, and location are required.");
+
+            std::string meetingType = "handover";
+            if (parsed.has("meeting_type") && parsed["meeting_type"].t() == crow::json::type::String)
+                meetingType = static_cast<std::string>(parsed["meeting_type"].s());
+
+            if (meetingType != "handover" && meetingType != "return")
+                return jsonError(400, "invalid_request", "meeting_type must be handover or return.");
+
+            const std::string meetingDate = trim(static_cast<std::string>(parsed["meeting_date"].s()));
+            const std::string meetingTime = trim(static_cast<std::string>(parsed["meeting_time"].s()));
+            const std::string location = trim(static_cast<std::string>(parsed["location"].s()));
+
+            if (meetingDate.size() != 10 || meetingDate[4] != '-' || meetingDate[7] != '-')
+                return jsonError(400, "invalid_request", "meeting_date must be in YYYY-MM-DD format.");
+
+            if (meetingTime.size() != 5 || meetingTime[2] != ':')
+                return jsonError(400, "invalid_request", "meeting_time must be in HH:MM format.");
+
+            if (location.size() < 2 || location.size() > 255)
+                return jsonError(400, "invalid_request", "location must be between 2 and 255 characters.");
+
+            crow::json::wvalue parameters;
+            parameters["p_conversation_id"] = conversationId;
+            parameters["p_meeting_type"] = meetingType;
+            parameters["p_meeting_date"] = meetingDate;
+            parameters["p_meeting_time"] = meetingTime;
+            parameters["p_location"] = location;
+
+            if (parsed.has("notes") && parsed["notes"].t() == crow::json::type::String)
+            {
+                const std::string notes = trim(static_cast<std::string>(parsed["notes"].s()));
+                if (notes.size() > 500)
+                    return jsonError(400, "invalid_request", "notes must not exceed 500 characters.");
+                parameters["p_notes"] = notes;
+            }
+            else
+            {
+                parameters["p_notes"] = nullptr;
+            }
+
+            const HttpResult rpcResult = supabase.rpc("propose_meeting", tokenFromRequest(request), parameters.dump());
+            if (rpcResult.curlCode != CURLE_OK || rpcResult.status < 200 || rpcResult.status >= 300)
+                return rpcError(rpcResult, "Could not propose meeting.");
+
+            crow::response response(201, rpcResult.body);
+            response.set_header("Content-Type", "application/json; charset=utf-8");
+            return response;
+        });
+
+    CROW_ROUTE(app, "/api/meetings/<string>/respond")
+        .methods(crow::HTTPMethod::Post)
+        ([&](const crow::request& request, const std::string& proposalId) {
+            const AuthResult auth = supabase.verifyAccessToken(request.get_header_value("Authorization"));
+            if (!auth.verified)
+                return authenticationError(auth);
+            if (auto disabled = communicationGate())
+                return std::move(*disabled);
+
+            if (!isValidUuid(proposalId))
+                return jsonError(400, "invalid_request", "proposal_id must be a valid UUID.");
+
+            if (request.body.size() > maxMutationBodyBytes)
+                return jsonError(413, "payload_too_large", "Request body exceeds the 16 KiB limit.");
+
+            const auto parsed = crow::json::load(request.body);
+            if (!isJsonObject(parsed) || !parsed.has("action") || parsed["action"].t() != crow::json::type::String)
+                return jsonError(400, "invalid_request", "action is required ('accept', 'decline', or 'cancel').");
+
+            const std::string action = static_cast<std::string>(parsed["action"].s());
+            if (action != "accept" && action != "decline" && action != "cancel")
+                return jsonError(400, "invalid_request", "action must be accept, decline, or cancel.");
+
+            crow::json::wvalue parameters;
+            parameters["p_proposal_id"] = proposalId;
+            parameters["p_action"] = action;
+
+            const HttpResult rpcResult = supabase.rpc("respond_to_meeting_proposal", tokenFromRequest(request), parameters.dump());
+            if (rpcResult.curlCode != CURLE_OK || rpcResult.status < 200 || rpcResult.status >= 300)
+                return rpcError(rpcResult, "Could not update meeting proposal.");
+
+            crow::response response(200, rpcResult.body);
+            response.set_header("Content-Type", "application/json; charset=utf-8");
+            return response;
+        });
+
+    CROW_ROUTE(app, "/api/notifications")
+        .methods(crow::HTTPMethod::Get)
+        ([&](const crow::request& request) {
+            const AuthResult auth = supabase.verifyAccessToken(request.get_header_value("Authorization"));
+            if (!auth.verified)
+                return authenticationError(auth);
+            if (auto disabled = communicationGate())
+                return std::move(*disabled);
+
+            const HttpResult result = supabase.postgrest(
+                "GET", "notifications?select=id,user_id,type,title,body,reference_id,is_read,created_at&order=created_at.desc&limit=50",
+                tokenFromRequest(request));
+            if (result.curlCode != CURLE_OK || result.status < 200 || result.status >= 300)
+                return upstreamError(result, "Could not retrieve notifications.");
+
+            crow::response response(200, result.body);
+            response.set_header("Content-Type", "application/json; charset=utf-8");
+            return response;
+        });
+
+    CROW_ROUTE(app, "/api/notifications/mark-read")
+        .methods(crow::HTTPMethod::Post)
+        ([&](const crow::request& request) {
+            const AuthResult auth = supabase.verifyAccessToken(request.get_header_value("Authorization"));
+            if (!auth.verified)
+                return authenticationError(auth);
+            if (auto disabled = communicationGate())
+                return std::move(*disabled);
+
+            if (request.body.size() > maxMutationBodyBytes)
+                return jsonError(413, "payload_too_large", "Request body exceeds the 16 KiB limit.");
+
+            const auto parsed = crow::json::load(request.body);
+            if (!isJsonObject(parsed))
+                return jsonError(400, "invalid_request", "A JSON object is required.");
+
+            crow::json::wvalue parameters;
+            if (parsed.has("mark_all") && parsed["mark_all"].t() == crow::json::type::True)
+            {
+                parameters["p_mark_all"] = true;
+                parameters["p_notification_ids"] = nullptr;
+            }
+            else if (parsed.has("ids") && parsed["ids"].t() == crow::json::type::List)
+            {
+                std::vector<std::string> ids;
+                for (const auto& item : parsed["ids"])
+                {
+                    if (item.t() == crow::json::type::String && isValidUuid(static_cast<std::string>(item.s())))
+                        ids.push_back(static_cast<std::string>(item.s()));
+                }
+                parameters["p_mark_all"] = false;
+                parameters["p_notification_ids"] = std::move(ids);
+            }
+            else
+            {
+                parameters["p_mark_all"] = false;
+                parameters["p_notification_ids"] = nullptr;
+            }
+
+            const HttpResult rpcResult = supabase.rpc("mark_notifications_read", tokenFromRequest(request), parameters.dump());
+            if (rpcResult.curlCode != CURLE_OK || rpcResult.status < 200 || rpcResult.status >= 300)
+                return rpcError(rpcResult, "Could not mark notifications as read.");
+
+            crow::response response(200, rpcResult.body);
+            response.set_header("Content-Type", "application/json; charset=utf-8");
+            return response;
+        });
+
+    CROW_ROUTE(app, "/api/conversations/<string>/return-request")
+        .methods(crow::HTTPMethod::Post)
+        ([&](const crow::request& request, const std::string& conversationId) {
+            const AuthResult auth = supabase.verifyAccessToken(request.get_header_value("Authorization"));
+            if (!auth.verified)
+                return authenticationError(auth);
+            if (auto disabled = communicationGate())
+                return std::move(*disabled);
+
+            if (!isValidUuid(conversationId))
+                return jsonError(400, "invalid_request", "conversation_id must be a valid UUID.");
+
+            if (request.body.size() > maxMutationBodyBytes)
+                return jsonError(413, "payload_too_large", "Request body exceeds the 16 KiB limit.");
+
+            crow::json::wvalue parameters;
+            parameters["p_conversation_id"] = conversationId;
+
+            const HttpResult rpcResult = supabase.rpc("request_return", tokenFromRequest(request), parameters.dump());
+            if (rpcResult.curlCode != CURLE_OK || rpcResult.status < 200 || rpcResult.status >= 300)
+                return rpcError(rpcResult, "Could not request resource return.");
+
+            crow::response response(200, rpcResult.body);
+            response.set_header("Content-Type", "application/json; charset=utf-8");
+            return response;
         });
 
     CROW_ROUTE(app, "/api/<path>")

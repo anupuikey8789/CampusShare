@@ -42,6 +42,21 @@ python -m http.server 5500
 
 Open `http://localhost:5500`. Configure the Supabase Auth site and redirect URLs for this local origin if the project requires email confirmation. Use a designated test account; registration creates a real Auth user. The static page downloads the pinned Supabase JS v2 UMD bundle from jsDelivr, so browser access to that CDN is required.
 
+## Repository layout
+
+```
+CampusShare/
+├── BACKEND/             # C++17 REST API service (Crow, Asio, libcurl)
+├── FRONTEND/            # Web client application (HTML, CSS, JS, tests)
+├── database/            # Supabase database scripts
+│   └── sql/             # Schema, migrations, RPCs, seeds, and validation SQL
+├── docs/                # Project documentation and specifications
+│   ├── architecture/    # Architecture & RPC API integration specifications
+│   ├── guides/          # Setup, deployment, migration, and testing guides
+│   └── reports/         # Task reports, security reviews, and audit logs
+└── README.md            # Project overview and quick start guide
+```
+
 ## API overview
 
 `GET /api/health` and `GET /api/test` are public diagnostics. All category, resource, and borrowing-request data routes require `Authorization: Bearer <Supabase access token>`. Current routes:
@@ -63,7 +78,7 @@ Each list route currently returns at most 100 rows; there is no pagination yet. 
 | POST | `/api/borrow-requests/{id}/return` | Owner-only RPC action; returns 503 while `SUPABASE_RPC_BORROW_STATUS=false` |
 | OPTIONS | `/api/*` | Preflight for configured CORS origins |
 
-Mutation payloads must be JSON objects no larger than 16 KiB. Use the full API table and examples in [BACKEND/README.md](BACKEND/README.md). Resource deletion behavior with related requests depends on the live foreign-key action; the backend does not delete or rewrite borrowing records. Status routes have a local contract but are not staging-verified. See [the RPC rollout guide](CAMPUSSHARE_RPC_DEPLOYMENT_GUIDE.md) and the separate staging migration, availability permission cutover, validation, and rollback SQL files. No live SQL was executed.
+Mutation payloads must be JSON objects no larger than 16 KiB. Use the full API table and examples in [BACKEND/README.md](BACKEND/README.md). Resource deletion behavior with related requests depends on the live foreign-key action; the backend does not delete or rewrite borrowing records. Status routes have a local contract but are not staging-verified. See [the RPC rollout guide](docs/guides/CAMPUSSHARE_RPC_DEPLOYMENT_GUIDE.md) and the separate staging migration, availability permission cutover, validation, and rollback SQL files in [database/sql/](database/sql/). No live SQL was executed.
 
 ## Tests
 

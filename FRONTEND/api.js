@@ -315,6 +315,78 @@
         },
         returnBorrowedResource: function (requestId) {
             return post("/api/borrow-requests/" + encodeURIComponent(requestId) + "/return", {});
+        },
+        conversations: function () {
+            return get("/api/conversations", true);
+        },
+        conversationMessages: function (conversationId) {
+            return get("/api/conversations/" + encodeURIComponent(conversationId) + "/messages", true);
+        },
+        sendMessage: function (conversationId, content, idempotencyKey) {
+            if (!conversationId || typeof conversationId !== "string" || !conversationId.trim()) {
+                return Promise.reject(new Error("A valid conversation ID is required."));
+            }
+            if (!content || typeof content !== "string" || !content.trim()) {
+                return Promise.reject(new Error("Message content cannot be empty."));
+            }
+            return post("/api/conversations/" + encodeURIComponent(conversationId) + "/messages", {
+                content: content.trim(),
+                client_idempotency_key: idempotencyKey || ("cs_" + Date.now() + "_" + Math.random().toString(36).slice(2, 10))
+            });
+        },
+        conversationMeetings: function (conversationId) {
+            return get("/api/conversations/" + encodeURIComponent(conversationId) + "/meetings", true);
+        },
+        proposeMeeting: function (conversationId, proposal) {
+            if (!conversationId || typeof conversationId !== "string" || !conversationId.trim()) {
+                return Promise.reject(new Error("A valid conversation ID is required."));
+            }
+            if (!proposal || typeof proposal !== "object") {
+                return Promise.reject(new Error("A meeting proposal object is required."));
+            }
+            const type = proposal.meeting_type || "handover";
+            if (type !== "handover" && type !== "return") {
+                return Promise.reject(new Error("meeting_type must be handover or return."));
+            }
+            if (!proposal.meeting_date || typeof proposal.meeting_date !== "string" || !proposal.meeting_date.trim()) {
+                return Promise.reject(new Error("meeting_date is required."));
+            }
+            if (!proposal.meeting_time || typeof proposal.meeting_time !== "string" || !proposal.meeting_time.trim()) {
+                return Promise.reject(new Error("meeting_time is required."));
+            }
+            if (!proposal.location || typeof proposal.location !== "string" || !proposal.location.trim()) {
+                return Promise.reject(new Error("location is required."));
+            }
+            return post("/api/conversations/" + encodeURIComponent(conversationId) + "/meetings", {
+                meeting_type: type,
+                meeting_date: proposal.meeting_date.trim(),
+                meeting_time: proposal.meeting_time.trim(),
+                location: proposal.location.trim(),
+                notes: proposal.notes ? proposal.notes.trim() : null
+            });
+        },
+        respondToMeeting: function (proposalId, action) {
+            if (!proposalId) {
+                return Promise.reject(new Error("A valid proposal ID is required."));
+            }
+            if (action !== "accept" && action !== "decline" && action !== "cancel") {
+                return Promise.reject(new Error("action must be accept, decline, or cancel."));
+            }
+            return post("/api/meetings/" + encodeURIComponent(proposalId) + "/respond", {
+                action: action
+            });
+        },
+        notifications: function () {
+            return get("/api/notifications", true);
+        },
+        markNotificationsRead: function (options) {
+            return post("/api/notifications/mark-read", {
+                ids: (options && options.ids) || null,
+                mark_all: Boolean(options && options.mark_all)
+            });
+        },
+        requestReturn: function (conversationId) {
+            return post("/api/conversations/" + encodeURIComponent(conversationId) + "/return-request", {});
         }
     });
 })();

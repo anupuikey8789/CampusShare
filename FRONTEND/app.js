@@ -75,6 +75,10 @@
     const resourcesSection = document.getElementById("resources");
     const browseResourcesMount = document.getElementById("browseResourcesMount");
     const myResourcesMount = document.getElementById("myResourcesMount");
+    const myBorrowTab = document.getElementById("myBorrowTab");
+    const mySellTab = document.getElementById("mySellTab");
+    const myDonateTab = document.getElementById("myDonateTab");
+    let myResourcesActiveSubTab = "borrow";
     const sellResourcesMount = document.getElementById("sellResourcesMount");
     const donateResourcesMount = document.getElementById("donateResourcesMount");
     const sellMarketplaceNote = document.getElementById("sellMarketplaceNote");
@@ -172,7 +176,7 @@
         const message = error && typeof error.message === "string" ? error.message : "";
         const status = error && Number(error.status);
         if (status === 429 || code === "over_email_send_rate_limit" || /email rate limit exceeded|too many requests/i.test(message)) {
-            return "Registration email limit reached. Please wait before trying again; repeated attempts will not send the email sooner. College and personal email addresses are supported.";
+            return "Registration email limit reached. Please wait before trying again; repeated attempts will not send the email sooner. If you already created an account, switch to 'Log in' to sign in directly with your password. College and personal email addresses are supported.";
         }
         return errorMessage(error);
     }
@@ -198,7 +202,7 @@
         { route: "about", element: aboutNav }
     ];
     const validRoutes = new Set(routeLinks.map(function (item) { return item.route; }));
-    const routeAliases = { resources: "browse", borrowRequestsSection: "borrowing", "sell-marketplace": "sell", "donate-marketplace": "donate" };
+    const routeAliases = { resources: "browse", borrowRequestsSection: "borrowing", "sell-marketplace": "sell", "donate-marketplace": "donate", messages: "borrowing" };
     routeLinks.forEach(function (item) {
         item.element.addEventListener("click", function (event) {
             event.preventDefault();
@@ -233,6 +237,8 @@
             route = "home";
             if (window.location.hash !== "#home") window.location.hash = "#home";
             setStatus("Log in to open that CampusShare page.", "error");
+        } else if (window.location.hash !== "#" + route) {
+            window.location.hash = "#" + route;
         }
 
         setSidebarOpen(false);
@@ -277,6 +283,24 @@
         updateMarketplaceFilterVisibility();
         showAddForm.hidden = !canAddFromCurrentRoute();
         emptyAddResource.hidden = !myResourcesOnly || !canAddFromCurrentRoute();
+        resourceViewTitle.textContent = resourceViewHeading();
+        if (resourcesLoaded) renderResources();
+    }
+
+    function setMyResourcesSubTab(subTab) {
+        myResourcesActiveSubTab = subTab;
+        if (myBorrowTab) {
+            myBorrowTab.classList.toggle("is-active", subTab === "borrow");
+            myBorrowTab.setAttribute("aria-selected", subTab === "borrow" ? "true" : "false");
+        }
+        if (mySellTab) {
+            mySellTab.classList.toggle("is-active", subTab === "sell");
+            mySellTab.setAttribute("aria-selected", subTab === "sell" ? "true" : "false");
+        }
+        if (myDonateTab) {
+            myDonateTab.classList.toggle("is-active", subTab === "donate");
+            myDonateTab.setAttribute("aria-selected", subTab === "donate" ? "true" : "false");
+        }
         resourceViewTitle.textContent = resourceViewHeading();
         if (resourcesLoaded) renderResources();
     }
@@ -331,6 +355,16 @@
 
     function setAuthMode(mode) {
         const registering = mode === "register";
+        const sourceForm = registering ? loginForm : registerForm;
+        const targetForm = registering ? registerForm : loginForm;
+        if (sourceForm && targetForm) {
+            if (sourceForm.elements.email && targetForm.elements.email && sourceForm.elements.email.value) {
+                targetForm.elements.email.value = sourceForm.elements.email.value;
+            }
+            if (sourceForm.elements.password && targetForm.elements.password && sourceForm.elements.password.value) {
+                targetForm.elements.password.value = sourceForm.elements.password.value;
+            }
+        }
         loginForm.hidden = registering;
         registerForm.hidden = !registering;
         document.getElementById("showLogin").setAttribute("aria-selected", String(!registering));
@@ -591,12 +625,20 @@
     }
 
     function filteredResources() {
+        let mode = listingModeFilter.value;
+        if (currentRoute === "sell") {
+            mode = "sell";
+        } else if (currentRoute === "donate") {
+            mode = "donate";
+        } else if (myResourcesOnly) {
+            mode = myResourcesActiveSubTab;
+        }
+
         return ui.filterResources(resources, {
             query: searchInput.value,
             categoryId: categoryFilter.value,
             resourceType: resourceTypeFilter.value,
-            listingMode: currentRoute === "sell" ? "sell"
-                : currentRoute === "donate" ? "donate" : listingModeFilter.value,
+            listingMode: mode,
             availability: availabilityFilter.value,
             minPrice: priceMinFilter.value,
             maxPrice: priceMaxFilter.value,
@@ -822,7 +864,7 @@
                 actions.appendChild(makeActionButton("Request to borrow", "borrow-btn", function (event) {
                     submitBorrowRequest(resource, event.currentTarget);
                 }));
-            } else if (!isOwner && hasActiveOwnRequest(resource.id)) {
+            } else if (!isOwner && (hasActiveOwnRequest(resource.id) || hasActiveTransferRequest(resource.id))) {
                 const pending = document.createElement("small");
                 pending.className = "pending-note";
                 pending.textContent = "You already have an active request";
@@ -1089,17 +1131,24 @@
         if (!marketplaceEnabled) return;
         const location = document.getElementById("pickupLocation").value.trim();
         const meetingPoint = document.getElementById("meetingPoint").value.trim();
+        const phone = document.getElementById("contactPhone") ? document.getElementById("contactPhone").value.trim() : "";
         if (!location || !meetingPoint) throw new Error("Enter both a campus pickup location and a separate meeting point.");
+        const rawInstructions = document.getElementById("handoverInstructions").value.trim();
+        let combinedInstructions = rawInstructions;
+        if (phone) {
+            combinedInstructions = `Phone: ${phone}${rawInstructions ? "\nNotes: " + rawInstructions : ""}`;
+        }
         await api.saveHandoverDetails(resourceId, {
             pickup_location: location,
             meeting_point: meetingPoint,
             preferred_pickup_time: document.getElementById("preferredPickupTime").value.trim() || null,
-            instructions: document.getElementById("handoverInstructions").value.trim() || null
+            instructions: combinedInstructions || null
         });
     }
 
     async function loadPrivateHandover(resource) {
         const panel = document.getElementById("handoverDetailsPanel");
+        const detailsText = document.getElementById("handoverDetailsText");
         const generation = resourceDetailsGeneration;
         panel.hidden = true;
         if (!marketplaceEnabled) return;
@@ -1107,14 +1156,73 @@
             const details = await api.handoverDetails(resource.id);
             if (generation !== resourceDetailsGeneration || !resourceDetailsDialog.open) return;
             if (!details) return;
-            const values = [
-                details.pickup_location && `Pickup: ${details.pickup_location}`,
-                details.meeting_point && `Meeting point: ${details.meeting_point}`,
-                details.preferred_pickup_time && `Preferred time: ${details.preferred_pickup_time}`,
-                details.instructions && `Instructions: ${details.instructions}`
-            ].filter(Boolean);
-            document.getElementById("handoverDetailsText").textContent = values.join(" · ");
-            panel.hidden = values.length === 0;
+
+            let phone = "";
+            let notes = details.instructions || "";
+            const phoneMatch = notes.match(/^Phone:\s*([^\n\r]+)/i);
+            if (phoneMatch) {
+                phone = phoneMatch[1].trim();
+                notes = notes.replace(/^Phone:\s*[^\n\r]+(\r?\nNotes:\s*|\r?\n)?/i, "").trim();
+            }
+
+            const cleanPhone = phone.replace(/[^\d+]/g, "");
+            const whatsappNumber = cleanPhone.replace(/^\+/, "");
+            const whatsappLink = whatsappNumber ? `https://wa.me/${whatsappNumber}` : null;
+
+            if (detailsText) {
+                detailsText.replaceChildren();
+                if (phone) {
+                    const phoneCard = document.createElement("div");
+                    phoneCard.className = "handover-phone-card";
+
+                    const label = document.createElement("div");
+                    label.className = "phone-label";
+                    label.textContent = "📞 Owner Contact Phone (Approved Request)";
+                    phoneCard.appendChild(label);
+
+                    const phoneRow = document.createElement("div");
+                    phoneRow.className = "phone-number";
+
+                    const phoneLink = document.createElement("a");
+                    phoneLink.className = "phone-link";
+                    phoneLink.href = `tel:${cleanPhone}`;
+                    phoneLink.textContent = phone;
+                    phoneRow.appendChild(phoneLink);
+
+                    if (whatsappLink) {
+                        const waBtn = document.createElement("a");
+                        waBtn.className = "whatsapp-btn";
+                        waBtn.href = whatsappLink;
+                        waBtn.target = "_blank";
+                        waBtn.rel = "noopener noreferrer";
+                        waBtn.textContent = "💬 Chat on WhatsApp";
+                        phoneRow.appendChild(waBtn);
+                    }
+
+                    phoneCard.appendChild(phoneRow);
+                    detailsText.appendChild(phoneCard);
+                }
+
+                const rows = [
+                    details.pickup_location && ["📍 Campus Pickup Location", details.pickup_location],
+                    details.meeting_point && ["🤝 Meeting Point", details.meeting_point],
+                    details.preferred_pickup_time && ["⏰ Preferred Time", details.preferred_pickup_time],
+                    notes && ["📝 Notes", notes]
+                ].filter(Boolean);
+
+                rows.forEach(function (row) {
+                    const rowElem = document.createElement("div");
+                    rowElem.className = "handover-contact-row";
+                    const strong = document.createElement("strong");
+                    strong.textContent = `${row[0]}: `;
+                    rowElem.appendChild(strong);
+                    rowElem.appendChild(document.createTextNode(row[1]));
+                    detailsText.appendChild(rowElem);
+                });
+            }
+
+            const hasAny = Boolean(phone || details.pickup_location || details.meeting_point || details.preferred_pickup_time || notes);
+            panel.hidden = !hasAny;
         } catch (_error) {
             // RLS intentionally hides handover data from unrelated users.
         }
@@ -1181,9 +1289,14 @@
             const note = document.createElement("small");
             note.className = "pending-note";
             note.textContent = borrowStatusRpcEnabled
-                ? "This request has no owner action in its current status."
+                ? (request.status === "returned" ? "✓ Returned & loan completed" : request.status === "rejected" ? "✕ Request rejected" : "This request has no owner action in its current status.")
                 : "Submitted by another student. Owner actions appear when the secure staging workflow is enabled.";
             card.appendChild(note);
+        }
+        if (resource && (request.status === "approved" || request.status === "return_requested")) {
+            card.appendChild(makeActionButton("View Contact & Handover", "secondary-btn", function () {
+                openResourceDetails(resource);
+            }));
         }
         return card;
     }
@@ -1198,7 +1311,7 @@
             if (action === "approve") {
                 const dueInput = button.closest(".borrow-request-card")?.querySelector(".borrow-due-date");
                 const dueAt = dueInput && dueInput.value
-                    ? new Date(`${dueInput.value}T23:59:59.000Z`).toISOString()
+                    ? `${dueInput.value}T23:59:59Z`
                     : null;
                 if (dueAt && request.requested_at && dueAt < request.requested_at)
                     throw new Error("The due date cannot be earlier than the request date.");
@@ -1209,12 +1322,15 @@
                 await api.returnBorrowedResource(requestId);
             }
             const refreshed = await loadLibrary();
-            setBorrowStatus(
-                refreshed ? "Borrowing request updated." : "Request updated, but the latest data could not be loaded.",
-                refreshed ? "success" : "error"
-            );
+            const msg = refreshed
+                ? (action === "approve" ? "Borrowing request approved." : action === "reject" ? "Borrowing request rejected." : "Resource marked as returned.")
+                : "Request updated, but the latest data could not be loaded.";
+            setStatus(msg, refreshed ? "success" : "error");
+            setBorrowStatus(msg, refreshed ? "success" : "error");
         } catch (error) {
-            setBorrowStatus(errorMessage(error), "error");
+            const err = errorMessage(error);
+            setStatus(err, "error");
+            setBorrowStatus(err, "error");
         } finally {
             borrowStatusBusy.delete(requestId);
             if (button.isConnected) setButtonBusy(button, false);
@@ -1295,7 +1411,7 @@
                 updateTransferRequest(request, "cancel", event.currentTarget);
             }));
         } else if (resource && (request.status === "approved" || request.status === "completed")) {
-            card.appendChild(makeActionButton("View campus handover", "secondary-btn", function () { openResourceDetails(resource); }));
+            card.appendChild(makeActionButton("View Contact & Handover", "secondary-btn", function () { openResourceDetails(resource); }));
         }
         return card;
     }
@@ -1385,21 +1501,45 @@
             else if (action === "complete-donation") await api.completeDonation(request.id);
             else if (action === "cancel") await api.cancelTransferRequest(request.id);
             await loadLibrary();
-            setBorrowStatus("Transfer request updated.", "success");
-        } catch (error) { setBorrowStatus(errorMessage(error), "error"); }
-        finally { if (button.isConnected) setButtonBusy(button, false); }
+            const msg = action === "approve" ? "Transfer request approved." : action === "reject" ? "Transfer request rejected." : action === "cancel" ? "Transfer request cancelled." : "Transfer completed.";
+            setBorrowStatus(msg, "success");
+            setStatus(msg, "success");
+        } catch (error) {
+            const err = errorMessage(error);
+            setBorrowStatus(err, "error");
+            setStatus(err, "error");
+        } finally { if (button.isConnected) setButtonBusy(button, false); }
     }
 
     async function submitTransferRequest(resource, button) {
-        if (!marketplaceEnabled || !currentSession || ui.isOwnResource(resource, currentSession.user.id)) return;
+        if (!marketplaceEnabled || !currentSession || !currentSession.user) return;
+        if (ui.isOwnResource(resource, currentSession.user.id)) {
+            setStatus("You cannot request your own resource.", "error");
+            return;
+        }
+        if (resourceDetailsDialog.open) {
+            resourceDetailsDialog.close();
+        }
         setButtonBusy(button, true, "Sending…");
+        setStatus("");
         try {
-            await api.createTransferRequest(resource.id, resource.listing_mode);
-            await loadLibrary();
-            setBorrowStatus("Request submitted as pending. Arrange any payment directly; CampusShare does not process it.", "success");
-        } catch (error) { setBorrowStatus(errorMessage(error), "error"); }
-        finally { if (button.isConnected) setButtonBusy(button, false); }
+            await api.createTransferRequest(resource.id, (resource.listing_mode || "sell").toLowerCase());
+            const refreshed = await loadLibrary();
+            const message = resource.listing_mode === "sell"
+                ? "Purchase request submitted as pending. Arrange any payment directly; CampusShare does not process it."
+                : "Donation request submitted as pending.";
+            setStatus(message, "success");
+            setBorrowStatus(message, "success");
+        } catch (error) {
+            const err = errorMessage(error);
+            setStatus(err, "error");
+            setBorrowStatus(err, "error");
+        } finally {
+            if (button.isConnected) setButtonBusy(button, false);
+        }
     }
+
+
 
     function clearLibrary() {
         categories = [];
@@ -1611,7 +1751,16 @@
                     document.getElementById("pickupLocation").value = details.pickup_location || "";
                     document.getElementById("meetingPoint").value = details.meeting_point || "";
                     document.getElementById("preferredPickupTime").value = details.preferred_pickup_time || "";
-                    document.getElementById("handoverInstructions").value = details.instructions || "";
+                    let instructions = details.instructions || "";
+                    let phone = "";
+                    const phoneMatch = instructions.match(/^Phone:\s*([^\n\r]+)/i);
+                    if (phoneMatch) {
+                        phone = phoneMatch[1].trim();
+                        instructions = instructions.replace(/^Phone:\s*[^\n\r]+(\r?\nNotes:\s*|\r?\n)?/i, "").trim();
+                    }
+                    const phoneInput = document.getElementById("contactPhone");
+                    if (phoneInput) phoneInput.value = phone;
+                    document.getElementById("handoverInstructions").value = instructions;
                 }).catch(function () {});
             }
         } else {
@@ -1626,6 +1775,8 @@
             document.getElementById("salePrice").value = "";
             document.getElementById("itemCondition").value = "new";
             document.getElementById("purchaseYear").value = "";
+            const phoneInput = document.getElementById("contactPhone");
+            if (phoneInput) phoneInput.value = "";
             document.getElementById("pickupLocation").value = "";
             document.getElementById("meetingPoint").value = "";
             document.getElementById("preferredPickupTime").value = "";
@@ -1727,6 +1878,11 @@
             const purchaseYear = payload.purchase_year;
             if (payload.listing_mode === "sell" && (!Number.isInteger(purchaseYear) || purchaseYear < 1900 || purchaseYear > new Date().getFullYear())) {
                 setResourceFormStatus("Enter a valid purchase year that is not in the future.", "error");
+                return;
+            }
+            const contactPhone = document.getElementById("contactPhone") ? document.getElementById("contactPhone").value.trim() : "";
+            if (!contactPhone) {
+                setResourceFormStatus("Enter your contact phone number so approved requesters can coordinate handover.", "error");
                 return;
             }
             if (!document.getElementById("pickupLocation").value.trim() || !document.getElementById("meetingPoint").value.trim()) {
@@ -1832,8 +1988,8 @@
         setStatus("");
         try {
             const dueInput = document.getElementById("borrowDueDate");
-            const dueAt = marketplaceEnabled && dueInput.value
-                ? new Date(`${dueInput.value}T23:59:59.000Z`).toISOString()
+            const dueAt = marketplaceEnabled && dueInput && dueInput.value
+                ? `${dueInput.value}T23:59:59Z`
                 : null;
             await api.createBorrowRequest({ resource_id: resourceId, due_at: dueAt });
             const refreshed = await loadLibrary();
@@ -1947,9 +2103,29 @@
             if (mode === "register" && !fullName) {
                 throw new Error("Enter your full name to create your profile.");
             }
-            const result = mode === "register"
-                ? await auth.signUp(email, password, fullName)
-                : await auth.signIn(email, password);
+            let result;
+            if (mode === "register") {
+                result = await auth.signUp(email, password, fullName);
+                if (result && result.error) {
+                    const errStatus = Number(result.error.status);
+                    const errCode = result.error.code || "";
+                    const errMsg = result.error.message || "";
+                    const isRateLimitOrExisting = errStatus === 429 ||
+                        errCode === "over_email_send_rate_limit" ||
+                        errCode === "user_already_exists" ||
+                        /email rate limit exceeded|already registered|user already exists/i.test(errMsg);
+
+                    if (isRateLimitOrExisting && typeof auth.signIn === "function") {
+                        const fallbackLogin = await auth.signIn(email, password);
+                        if (fallbackLogin && !fallbackLogin.error && fallbackLogin.data && fallbackLogin.data.session) {
+                            result = fallbackLogin;
+                            mode = "login";
+                        }
+                    }
+                }
+            } else {
+                result = await auth.signIn(email, password);
+            }
             if (result.error) throw result.error;
 
             if (mode === "register" && result.data && result.data.user && !result.data.session) {
@@ -2065,6 +2241,9 @@
     resourceDetailsDialog.addEventListener("click", function (event) {
         if (event.target === resourceDetailsDialog) resourceDetailsDialog.close();
     });
+    if (myBorrowTab) myBorrowTab.addEventListener("click", function () { setMyResourcesSubTab("borrow"); });
+    if (mySellTab) mySellTab.addEventListener("click", function () { setMyResourcesSubTab("sell"); });
+    if (myDonateTab) myDonateTab.addEventListener("click", function () { setMyResourcesSubTab("donate"); });
     searchInput.addEventListener("input", renderResources);
     categoryFilter.addEventListener("change", renderResources);
     resourceTypeFilter.addEventListener("change", renderResources);
