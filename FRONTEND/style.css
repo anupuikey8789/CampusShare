@@ -182,8 +182,9 @@ body {
     justify-content: space-between;
     gap: 16px;
     padding: 10px 30px;
-    border-bottom: 1px solid #e8eaf0;
-    background: #fff;
+    border-bottom: 1px solid #1e293b;
+    background: #0f172a;
+    color: #ffffff;
 }
 
 .topbar-leading {
@@ -197,7 +198,7 @@ body {
     display: flex;
     align-items: center;
     gap: 9px;
-    color: #1c263a;
+    color: #ffffff;
     text-decoration: none;
     white-space: nowrap;
 }
@@ -211,13 +212,14 @@ body {
 
 .topbar-brand strong {
     font-size: 16px;
+    color: #ffffff;
 }
 
 .topbar-page-title {
     min-width: 0;
     margin: 0 auto;
     overflow: hidden;
-    color: #465064;
+    color: #cbd5e1;
     font-size: 14px;
     font-weight: 600;
     text-overflow: ellipsis;
@@ -231,7 +233,7 @@ body {
 }
 
 .topbar-student-name {
-    color: #263044;
+    color: #f8fafc;
     font-size: 13px;
     font-weight: 600;
 }
@@ -244,7 +246,7 @@ body {
 .topbar-student-email {
     max-width: 190px;
     overflow: hidden;
-    color: #858d9c;
+    color: #94a3b8;
     font-size: 10px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -261,10 +263,19 @@ body {
     min-width: 42px;
     min-height: 40px;
     padding: 8px 10px;
-    background: #f1f2ff;
-    color: #5146e5;
+    background: #1e293b;
+    color: #a5b4fc;
+    border: 1px solid #334155;
+    border-radius: 8px;
     font-size: 19px;
     line-height: 1;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.mobile-nav-toggle:hover {
+    background: #334155;
+    color: #ffffff;
 }
 
 .sidebar-backdrop {
@@ -306,20 +317,23 @@ select:focus-visible, textarea:focus-visible {
 
 .hero {
     position: relative;
-    min-height: 570px;
+    min-height: calc(100vh - 68px);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 80px 8%;
+    padding: 70px 8%;
     text-align: center;
     color: white;
 
     background-image:
-    linear-gradient(
-        rgba(10, 25, 35, 0.55),
-        rgba(10, 25, 35, 0.65)
-    ),
-url("ChatGPT Image Oct 27, 2026, 04_01_37 PM.png");
+        linear-gradient(
+            180deg,
+            rgba(15, 23, 42, 0.65) 0%,
+            rgba(10, 25, 35, 0.50) 30%,
+            rgba(10, 25, 35, 0.60) 70%,
+            rgba(15, 23, 42, 0.95) 100%
+        ),
+        url("ChatGPT Image Oct 27, 2026, 04_01_37 PM.png");
 
     background-size: cover;
     background-position: center;
@@ -464,10 +478,12 @@ url("ChatGPT Image Oct 27, 2026, 04_01_37 PM.png");
 }
 
 footer {
-    padding: 24px;
+    padding: 22px 24px;
     text-align: center;
-    color: #64748b;
-    background: white;
+    color: #94a3b8;
+    background: #0f172a;
+    border-top: 1px solid #1e293b;
+    font-size: 0.88rem;
 }
 
 @media (max-width: 700px) {
