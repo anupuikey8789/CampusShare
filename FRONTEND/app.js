@@ -834,7 +834,7 @@
                 actions.appendChild(makeActionButton("Request to borrow", "borrow-btn", function (event) {
                     submitBorrowRequest(resource, event.currentTarget);
                 }));
-            } else if (!isOwner && hasActiveOwnRequest(resource.id)) {
+            } else if (!isOwner && (hasActiveOwnRequest(resource.id) || hasActiveTransferRequest(resource.id))) {
                 const pending = document.createElement("small");
                 pending.className = "pending-note";
                 pending.textContent = "You already have an active request";
@@ -1292,12 +1292,15 @@
                 await api.returnBorrowedResource(requestId);
             }
             const refreshed = await loadLibrary();
-            setBorrowStatus(
-                refreshed ? "Borrowing request updated." : "Request updated, but the latest data could not be loaded.",
-                refreshed ? "success" : "error"
-            );
+            const msg = refreshed
+                ? (action === "approve" ? "Borrowing request approved." : action === "reject" ? "Borrowing request rejected." : "Resource marked as returned.")
+                : "Request updated, but the latest data could not be loaded.";
+            setStatus(msg, refreshed ? "success" : "error");
+            setBorrowStatus(msg, refreshed ? "success" : "error");
         } catch (error) {
-            setBorrowStatus(errorMessage(error), "error");
+            const err = errorMessage(error);
+            setStatus(err, "error");
+            setBorrowStatus(err, "error");
         } finally {
             borrowStatusBusy.delete(requestId);
             if (button.isConnected) setButtonBusy(button, false);
@@ -1468,20 +1471,42 @@
             else if (action === "complete-donation") await api.completeDonation(request.id);
             else if (action === "cancel") await api.cancelTransferRequest(request.id);
             await loadLibrary();
-            setBorrowStatus("Transfer request updated.", "success");
-        } catch (error) { setBorrowStatus(errorMessage(error), "error"); }
-        finally { if (button.isConnected) setButtonBusy(button, false); }
+            const msg = action === "approve" ? "Transfer request approved." : action === "reject" ? "Transfer request rejected." : action === "cancel" ? "Transfer request cancelled." : "Transfer completed.";
+            setBorrowStatus(msg, "success");
+            setStatus(msg, "success");
+        } catch (error) {
+            const err = errorMessage(error);
+            setBorrowStatus(err, "error");
+            setStatus(err, "error");
+        } finally { if (button.isConnected) setButtonBusy(button, false); }
     }
 
     async function submitTransferRequest(resource, button) {
-        if (!marketplaceEnabled || !currentSession || ui.isOwnResource(resource, currentSession.user.id)) return;
+        if (!marketplaceEnabled || !currentSession || !currentSession.user) return;
+        if (ui.isOwnResource(resource, currentSession.user.id)) {
+            setStatus("You cannot request your own resource.", "error");
+            return;
+        }
+        if (resourceDetailsDialog.open) {
+            resourceDetailsDialog.close();
+        }
         setButtonBusy(button, true, "Sending…");
+        setStatus("");
         try {
-            await api.createTransferRequest(resource.id, resource.listing_mode);
-            await loadLibrary();
-            setBorrowStatus("Request submitted as pending. Arrange any payment directly; CampusShare does not process it.", "success");
-        } catch (error) { setBorrowStatus(errorMessage(error), "error"); }
-        finally { if (button.isConnected) setButtonBusy(button, false); }
+            await api.createTransferRequest(resource.id, (resource.listing_mode || "sell").toLowerCase());
+            const refreshed = await loadLibrary();
+            const message = resource.listing_mode === "sell"
+                ? "Purchase request submitted as pending. Arrange any payment directly; CampusShare does not process it."
+                : "Donation request submitted as pending.";
+            setStatus(message, "success");
+            setBorrowStatus(message, "success");
+        } catch (error) {
+            const err = errorMessage(error);
+            setStatus(err, "error");
+            setBorrowStatus(err, "error");
+        } finally {
+            if (button.isConnected) setButtonBusy(button, false);
+        }
     }
 
 

@@ -758,9 +758,6 @@ crow::response upstreamError(const HttpResult& result, const std::string& messag
 
 crow::response rpcError(const HttpResult& result, const std::string& fallback)
 {
-    if (result.curlCode != CURLE_OK || result.status == 0 || result.status >= 500)
-        return jsonError(502, "upstream_error", fallback);
-
     const auto parsed = crow::json::load(result.body);
     std::string code;
     std::string dbMessage;
@@ -772,6 +769,15 @@ crow::response rpcError(const HttpResult& result, const std::string& fallback)
             dbMessage = parsed["message"].s();
     }
 
+    if (result.curlCode != CURLE_OK || result.status == 0)
+        return jsonError(502, "upstream_error", fallback);
+
+    if (result.status >= 500)
+    {
+        const std::string upstreamMsg = !dbMessage.empty() ? dbMessage : fallback;
+        return jsonError(502, "upstream_error", upstreamMsg);
+    }
+
     if (result.status == 401 || code == "28000")
         return jsonError(401, "unauthorized", "A valid Supabase access token is required.");
     if (result.status == 403 || code == "42501" || dbMessage == "Only the owner may change availability")
@@ -781,7 +787,10 @@ crow::response rpcError(const HttpResult& result, const std::string& fallback)
     if (result.status == 409 || code == "P0001" || code == "23505" || code == "23P01" ||
         dbMessage == "Cannot request own resource" || dbMessage == "Resource unavailable" ||
         dbMessage == "Active request exists" || dbMessage == "Approved loan remains active")
-        return jsonError(409, "conflict", "The operation conflicts with the current resource or request state.");
+    {
+        const std::string conflictMsg = !dbMessage.empty() ? dbMessage : "The operation conflicts with the current resource or request state.";
+        return jsonError(409, "conflict", conflictMsg);
+    }
     if (dbMessage == "Authentication required")
         return jsonError(401, "unauthorized", "A valid Supabase access token is required.");
     if (dbMessage == "due_at precedes request time" || dbMessage == "Invalid availability status" ||
