@@ -157,6 +157,7 @@ test("index.html contains contact and handover details elements and removes stan
     const requiredIds = [
         "handoverDetailsPanel",
         "handoverDetailsText",
+        "contactPhone",
         "pickupLocation",
         "meetingPoint",
         "preferredPickupTime",
@@ -177,6 +178,8 @@ test("style.css contains responsive styles for communication layout and chat bub
     assert.ok(css.includes(".message-bubble.mine"), "Missing .message-bubble.mine in style.css");
     assert.ok(css.includes(".message-bubble.theirs"), "Missing .message-bubble.theirs in style.css");
     assert.ok(css.includes(".meeting-card"), "Missing .meeting-card in style.css");
+    assert.ok(css.includes(".handover-phone-card"), "Missing .handover-phone-card in style.css");
+    assert.ok(css.includes(".whatsapp-btn"), "Missing .whatsapp-btn in style.css");
 });
 
 test("communication validation: empty message and invalid parameters are rejected", async () => {

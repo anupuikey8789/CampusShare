@@ -286,15 +286,17 @@
                 <label for="purchaseYear">Purchase year</label>
                 <input id="purchaseYear" type="number" min="1900" step="1">
             </div>
+            <label for="contactPhone">Owner Contact Phone Number <span class="required-indicator">*</span></label>
+            <input id="contactPhone" type="tel" maxlength="20" placeholder="e.g. +91 98765 43210">
             <label for="pickupLocation">Campus pickup location</label>
             <input id="pickupLocation" type="text" maxlength="160" placeholder="e.g. Campus library">
             <label for="meetingPoint">Preferred meeting point</label>
             <input id="meetingPoint" type="text" maxlength="160" placeholder="e.g. Main library entrance">
             <label for="preferredPickupTime">Preferred meeting time</label>
             <input id="preferredPickupTime" type="text" maxlength="160" placeholder="Optional">
-            <label for="handoverInstructions">Handover instructions</label>
-            <textarea id="handoverInstructions" maxlength="1000" placeholder="Optional; do not enter a home address"></textarea>
-            <small>Pickup and meeting details are private. They are visible to the listing owner and a requester only after an eligible request is approved or completed.</small>
+            <label for="handoverInstructions">Handover instructions & notes</label>
+            <textarea id="handoverInstructions" maxlength="1000" placeholder="Optional; any special instructions for handover"></textarea>
+            <small>🔒 <strong>Privacy Protected:</strong> Your phone number, pickup location, and meeting point are private. They will only be visible to a student after you approve their request.</small>
             <p class="payment-disclaimer">CampusShare does not process or verify payments. Students arrange any payment directly.</p>
         </fieldset>
 

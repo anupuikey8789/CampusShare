@@ -731,6 +731,7 @@ test("marketplace resource form validates sell pricing, saves handover, and disp
     harness.get("purchaseYear").value = "2022";
     harness.get("pickupLocation").value = "Main library entrance";
     harness.get("meetingPoint").value = "Student center lobby";
+    harness.get("contactPhone").value = "+91 98765 43210";
     harness.get("resourceForm").dispatch("submit");
     await settle();
     const created = harness.state.calls.find((call) => call[0] === "create")[1];
@@ -740,7 +741,7 @@ test("marketplace resource form validates sell pricing, saves handover, and disp
     assert.equal(created.sale_price, 80);
     assert.equal(created.item_condition, "good");
     assert.equal(created.purchase_year, 2022);
-    assert.equal(harness.state.calls.some((call) => call[0] === "handover" && call[1].pickup_location === "Main library entrance" && call[1].meeting_point === "Student center lobby"), true);
+    assert.equal(harness.state.calls.some((call) => call[0] === "handover" && call[1].pickup_location === "Main library entrance" && call[1].meeting_point === "Student center lobby" && call[1].instructions.includes("Phone: +91 98765 43210")), true);
 
     await harness.context.CampusShareApi.resource(2);
     harness.get("resourceDetailsDialog").showModal();
@@ -785,6 +786,7 @@ test("resource images validate, preview, remove, upload to Storage, and save met
     harness.get("resourceAvailability").value = "available";
     harness.get("pickupLocation").value = "Main library";
     harness.get("meetingPoint").value = "Student center";
+    harness.get("contactPhone").value = "+91 98765 43210";
     harness.get("resourceForm").dispatch("submit");
     await settle();
     assert.equal(harness.state.calls.some((call) => call[0] === "image-upload" && call[2] === "front.png"), true, JSON.stringify(harness.state.calls));
@@ -879,6 +881,7 @@ test("failed Storage upload attempts are cleaned up using the same signed-in ses
     harness.get("resourceAvailability").value = "available";
     harness.get("pickupLocation").value = "Main library";
     harness.get("meetingPoint").value = "Student center";
+    harness.get("contactPhone").value = "+91 98765 43210";
     harness.get("resourceImages").files = [{ name: "cleanup.png", type: "image/png", size: 100 }];
     harness.get("resourceImages").dispatch("change");
     harness.get("resourceForm").dispatch("submit");

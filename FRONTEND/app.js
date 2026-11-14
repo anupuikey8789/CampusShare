@@ -198,7 +198,7 @@
         { route: "about", element: aboutNav }
     ];
     const validRoutes = new Set(routeLinks.map(function (item) { return item.route; }));
-    const routeAliases = { resources: "browse", borrowRequestsSection: "borrowing", "sell-marketplace": "sell", "donate-marketplace": "donate" };
+    const routeAliases = { resources: "browse", borrowRequestsSection: "borrowing", "sell-marketplace": "sell", "donate-marketplace": "donate", messages: "borrowing" };
     routeLinks.forEach(function (item) {
         item.element.addEventListener("click", function (event) {
             event.preventDefault();
@@ -233,6 +233,8 @@
             route = "home";
             if (window.location.hash !== "#home") window.location.hash = "#home";
             setStatus("Log in to open that CampusShare page.", "error");
+        } else if (window.location.hash !== "#" + route) {
+            window.location.hash = "#" + route;
         }
 
         setSidebarOpen(false);
@@ -1099,17 +1101,24 @@
         if (!marketplaceEnabled) return;
         const location = document.getElementById("pickupLocation").value.trim();
         const meetingPoint = document.getElementById("meetingPoint").value.trim();
+        const phone = document.getElementById("contactPhone") ? document.getElementById("contactPhone").value.trim() : "";
         if (!location || !meetingPoint) throw new Error("Enter both a campus pickup location and a separate meeting point.");
+        const rawInstructions = document.getElementById("handoverInstructions").value.trim();
+        let combinedInstructions = rawInstructions;
+        if (phone) {
+            combinedInstructions = `Phone: ${phone}${rawInstructions ? "\nNotes: " + rawInstructions : ""}`;
+        }
         await api.saveHandoverDetails(resourceId, {
             pickup_location: location,
             meeting_point: meetingPoint,
             preferred_pickup_time: document.getElementById("preferredPickupTime").value.trim() || null,
-            instructions: document.getElementById("handoverInstructions").value.trim() || null
+            instructions: combinedInstructions || null
         });
     }
 
     async function loadPrivateHandover(resource) {
         const panel = document.getElementById("handoverDetailsPanel");
+        const detailsText = document.getElementById("handoverDetailsText");
         const generation = resourceDetailsGeneration;
         panel.hidden = true;
         if (!marketplaceEnabled) return;
@@ -1117,14 +1126,73 @@
             const details = await api.handoverDetails(resource.id);
             if (generation !== resourceDetailsGeneration || !resourceDetailsDialog.open) return;
             if (!details) return;
-            const values = [
-                details.pickup_location && `Pickup: ${details.pickup_location}`,
-                details.meeting_point && `Meeting point: ${details.meeting_point}`,
-                details.preferred_pickup_time && `Preferred time: ${details.preferred_pickup_time}`,
-                details.instructions && `Instructions: ${details.instructions}`
-            ].filter(Boolean);
-            document.getElementById("handoverDetailsText").textContent = values.join(" · ");
-            panel.hidden = values.length === 0;
+
+            let phone = "";
+            let notes = details.instructions || "";
+            const phoneMatch = notes.match(/^Phone:\s*([^\n\r]+)/i);
+            if (phoneMatch) {
+                phone = phoneMatch[1].trim();
+                notes = notes.replace(/^Phone:\s*[^\n\r]+(\r?\nNotes:\s*|\r?\n)?/i, "").trim();
+            }
+
+            const cleanPhone = phone.replace(/[^\d+]/g, "");
+            const whatsappNumber = cleanPhone.replace(/^\+/, "");
+            const whatsappLink = whatsappNumber ? `https://wa.me/${whatsappNumber}` : null;
+
+            if (detailsText) {
+                detailsText.replaceChildren();
+                if (phone) {
+                    const phoneCard = document.createElement("div");
+                    phoneCard.className = "handover-phone-card";
+
+                    const label = document.createElement("div");
+                    label.className = "phone-label";
+                    label.textContent = "📞 Owner Contact Phone (Approved Request)";
+                    phoneCard.appendChild(label);
+
+                    const phoneRow = document.createElement("div");
+                    phoneRow.className = "phone-number";
+
+                    const phoneLink = document.createElement("a");
+                    phoneLink.className = "phone-link";
+                    phoneLink.href = `tel:${cleanPhone}`;
+                    phoneLink.textContent = phone;
+                    phoneRow.appendChild(phoneLink);
+
+                    if (whatsappLink) {
+                        const waBtn = document.createElement("a");
+                        waBtn.className = "whatsapp-btn";
+                        waBtn.href = whatsappLink;
+                        waBtn.target = "_blank";
+                        waBtn.rel = "noopener noreferrer";
+                        waBtn.textContent = "💬 Chat on WhatsApp";
+                        phoneRow.appendChild(waBtn);
+                    }
+
+                    phoneCard.appendChild(phoneRow);
+                    detailsText.appendChild(phoneCard);
+                }
+
+                const rows = [
+                    details.pickup_location && ["📍 Campus Pickup Location", details.pickup_location],
+                    details.meeting_point && ["🤝 Meeting Point", details.meeting_point],
+                    details.preferred_pickup_time && ["⏰ Preferred Time", details.preferred_pickup_time],
+                    notes && ["📝 Notes", notes]
+                ].filter(Boolean);
+
+                rows.forEach(function (row) {
+                    const rowElem = document.createElement("div");
+                    rowElem.className = "handover-contact-row";
+                    const strong = document.createElement("strong");
+                    strong.textContent = `${row[0]}: `;
+                    rowElem.appendChild(strong);
+                    rowElem.appendChild(document.createTextNode(row[1]));
+                    detailsText.appendChild(rowElem);
+                });
+            }
+
+            const hasAny = Boolean(phone || details.pickup_location || details.meeting_point || details.preferred_pickup_time || notes);
+            panel.hidden = !hasAny;
         } catch (_error) {
             // RLS intentionally hides handover data from unrelated users.
         }
@@ -1310,7 +1378,7 @@
                 updateTransferRequest(request, "cancel", event.currentTarget);
             }));
         } else if (resource && (request.status === "approved" || request.status === "completed")) {
-            card.appendChild(makeActionButton("View campus handover", "secondary-btn", function () { openResourceDetails(resource); }));
+            card.appendChild(makeActionButton("View Contact & Handover", "secondary-btn", function () { openResourceDetails(resource); }));
         }
         return card;
     }
@@ -1628,7 +1696,16 @@
                     document.getElementById("pickupLocation").value = details.pickup_location || "";
                     document.getElementById("meetingPoint").value = details.meeting_point || "";
                     document.getElementById("preferredPickupTime").value = details.preferred_pickup_time || "";
-                    document.getElementById("handoverInstructions").value = details.instructions || "";
+                    let instructions = details.instructions || "";
+                    let phone = "";
+                    const phoneMatch = instructions.match(/^Phone:\s*([^\n\r]+)/i);
+                    if (phoneMatch) {
+                        phone = phoneMatch[1].trim();
+                        instructions = instructions.replace(/^Phone:\s*[^\n\r]+(\r?\nNotes:\s*|\r?\n)?/i, "").trim();
+                    }
+                    const phoneInput = document.getElementById("contactPhone");
+                    if (phoneInput) phoneInput.value = phone;
+                    document.getElementById("handoverInstructions").value = instructions;
                 }).catch(function () {});
             }
         } else {
@@ -1643,6 +1720,8 @@
             document.getElementById("salePrice").value = "";
             document.getElementById("itemCondition").value = "new";
             document.getElementById("purchaseYear").value = "";
+            const phoneInput = document.getElementById("contactPhone");
+            if (phoneInput) phoneInput.value = "";
             document.getElementById("pickupLocation").value = "";
             document.getElementById("meetingPoint").value = "";
             document.getElementById("preferredPickupTime").value = "";
@@ -1744,6 +1823,11 @@
             const purchaseYear = payload.purchase_year;
             if (payload.listing_mode === "sell" && (!Number.isInteger(purchaseYear) || purchaseYear < 1900 || purchaseYear > new Date().getFullYear())) {
                 setResourceFormStatus("Enter a valid purchase year that is not in the future.", "error");
+                return;
+            }
+            const contactPhone = document.getElementById("contactPhone") ? document.getElementById("contactPhone").value.trim() : "";
+            if (!contactPhone) {
+                setResourceFormStatus("Enter your contact phone number so approved requesters can coordinate handover.", "error");
                 return;
             }
             if (!document.getElementById("pickupLocation").value.trim() || !document.getElementById("meetingPoint").value.trim()) {
