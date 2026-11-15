@@ -349,10 +349,14 @@ bool loadConfig(Config& config)
         return false;
     }
     config.host = env("SERVER_HOST", config.host);
-    const std::string portValue = env("SERVER_PORT", "18080");
+    std::string portValue = env("SERVER_PORT");
+    if (portValue.empty())
+    {
+        portValue = env("PORT", "18080");
+    }
     if (!parsePort(portValue, config.port))
     {
-        std::cerr << "Invalid SERVER_PORT; expected an integer from 1 to 65535.\n";
+        std::cerr << "Invalid SERVER_PORT or PORT; expected an integer from 1 to 65535.\n";
         return false;
     }
     const std::string origins = env("CORS_ALLOWED_ORIGINS");
