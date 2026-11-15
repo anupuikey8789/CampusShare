@@ -25,7 +25,12 @@ WORKDIR /app/BACKEND
 
 # Configure and compile in Release mode
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release && \
-    cmake --build build --config Release
+    cmake --build build --config Release && \
+    if [ -f build/Release/campusshare_backend ]; then \
+        cp build/Release/campusshare_backend /app/campusshare_backend; \
+    else \
+        cp build/campusshare_backend /app/campusshare_backend; \
+    fi
 
 # Stage 2: Minimal runtime image
 FROM ubuntu:22.04 AS runner
@@ -39,8 +44,11 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy compiled executable from builder
-COPY --from=builder /app/BACKEND/build/Release/campusshare_backend /app/campusshare_backend
+COPY --from=builder /app/campusshare_backend /app/campusshare_backend
 
+# Render binds to 0.0.0.0 and assigns PORT dynamically
+ENV SERVER_HOST=0.0.0.0
+ENV SERVER_PORT=18080
 ENV PORT=18080
 EXPOSE 18080
 
