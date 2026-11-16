@@ -6,7 +6,7 @@ window.CAMPUSSHARE_LOCAL_CONFIG_OVERRIDE = window.CAMPUSSHARE_CONFIG || null;
 window.CAMPUSSHARE_CONFIG = {
     supabaseUrl: "https://jxndjuslvccxgayoachm.supabase.co",
     supabasePublishableKey: "sb_publishable_q1QUzaFWb3xW7bL-2bCkyQ_K5BBCa6_",
-    apiBase: "https://campusshare-2kul.onrender.com"
+    apiBase: "http://127.0.0.1:18080"
 };
 
 (function (window) {
